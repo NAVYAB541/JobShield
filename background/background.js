@@ -57,13 +57,14 @@ const MONEY_REQUEST_PHRASES = [
   'processing fee','admin fee','security deposit'
 ]
 const TOO_GOOD_PHRASES = [
-  'work from home','set your own hours','be your own boss','no experience needed',
+  // "work from home" removed — remote work is now a normal, legitimate arrangement
+  'set your own hours','be your own boss','no experience needed',
   'no experience required','no qualifications','earn from home','unlimited earning',
   'financial freedom','passive income','work 2 hours a day'
 ]
 const VAGUE_SALARY_PHRASES = [
-  'competitive salary','market rate','tbd','to be discussed',
-  'negotiable','based on experience','attractive package'
+  // Only truly evasive phrasing — "competitive salary" and "negotiable" are standard
+  'tbd','to be discussed','attractive package'
 ]
 
 function normalise(t) {
@@ -113,22 +114,23 @@ function analyseJob(job) {
   else if (tgtCount === 1) flags.push({ id:'tgtb_low', label:'"Too good to be true" language detected', weight:4 })
 
   if (countMatches(salary, VAGUE_SALARY_PHRASES) > 0 || !salary.trim() || salary === 'not specified')
-    flags.push({ id:'vague_salary', label:'Salary is vague or not listed', weight:3 })
+    flags.push({ id:'vague_salary', label:'Salary is vague or not listed', weight:1 })
 
   const wordCount = (job.description || '').trim().split(/\s+/).filter(Boolean).length
   if (wordCount < 80)
     flags.push({ id:'short_desc', label:`Job description is very short (${wordCount} words)`, weight:8 })
-
-  if (!job.companyWebsite || !job.companyWebsite.trim())
-    flags.push({ id:'no_website', label:'No company website linked', weight:4 })
 
   const isEntryLevel = /\b(graduate|entry.?level|junior|no experience)\b/.test(fullText)
   const isRemote     = /\b(remote|work from home|wfh|fully remote)\b/.test(fullText)
   if (isEntryLevel && isRemote && !job.location)
     flags.push({ id:'remote_entry', label:'Remote entry-level with no listed location', weight:5 })
 
-  const genericNames = ['company','confidential','undisclosed','anonymous','private company','own company']
-  if (genericNames.some(n => normalise(job.company || '').includes(n)))
+  // Exact-match single words to avoid flagging "Smith & Company" etc.
+  const companyNorm = normalise(job.company || '')
+  const isGenericCompany =
+    /^(confidential|undisclosed|anonymous)$/.test(companyNorm) ||
+    /(own company|private company|hiring confidentially)/.test(companyNorm)
+  if (isGenericCompany)
     flags.push({ id:'generic_company', label:'Company name is generic or confidential', weight:6 })
 
   // ── Job poster appears to be a job-seeker, not a recruiter ──
@@ -159,8 +161,7 @@ function analyseJob(job) {
   if (wordCount >= 300)
     greenFlags.push(`Detailed description (${wordCount} words)`)
 
-  const genericNames2 = ['company','confidential','undisclosed','anonymous','private company','own company']
-  if (job.company && !genericNames2.some(n => normalise(job.company).includes(n)))
+  if (job.company && !isGenericCompany)
     greenFlags.push(`Named company: ${job.company}`)
 
   if (job.location && job.location.trim())
