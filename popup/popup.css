@@ -359,6 +359,20 @@ main { padding: 14px; }
 }
 
 /* ── Platform footer ── */
+.extraction-confidence {
+  font-family: var(--font-mono);
+  font-size: 9px; letter-spacing: .07em;
+  margin-top: 6px; padding: 4px 8px;
+  border-radius: 4px;
+  text-align: center;
+}
+.ext-full    { color: var(--text-3); }
+.ext-limited {
+  color: var(--amber);
+  background: rgba(255,184,0,0.07);
+  border: 1px solid rgba(255,184,0,0.2);
+}
+
 .platform-footer {
   font-family: var(--font-mono);
   font-size: 9px; letter-spacing: .08em;

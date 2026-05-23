@@ -2,6 +2,12 @@ const LEVEL_LABEL   = { low: 'LOW RISK', medium: 'MEDIUM RISK', high: 'HIGH RISK
 const LEVEL_EMOJI   = { low: '🟢', medium: '🟡', high: '🔴' }
 const PLATFORM_LABEL = { linkedin: 'LinkedIn', indeed: 'Indeed', seek: 'Seek' }
 
+const EXTRACTION_CFG = {
+  'json-ld':     { label: '// data: structured',    cls: 'ext-full'    },
+  'dom':         { label: '// data: page scraped',  cls: 'ext-full'    },
+  'title-only':  { label: '⚠ title only — limited confidence', cls: 'ext-limited' },
+}
+
 function $(id) { return document.getElementById(id) }
 
 function showIdle() {
@@ -91,6 +97,17 @@ function showResult(result) {
     })
   } else {
     $('green-panel').classList.add('hidden')
+  }
+
+  // ── Extraction confidence ──
+  const extCfg = EXTRACTION_CFG[result.extractionMethod]
+  const extEl  = $('extraction-confidence')
+  if (extCfg) {
+    extEl.textContent  = extCfg.label
+    extEl.className    = `extraction-confidence ${extCfg.cls}`
+    extEl.classList.remove('hidden')
+  } else {
+    extEl.classList.add('hidden')
   }
 
   // ── Footer ──

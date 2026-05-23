@@ -57,7 +57,8 @@
             recruiterEmail: '',
             companyWebsite: d.hiringOrganization?.sameAs || '',
             platform:       'linkedin',
-            jobId:          jobId()
+            jobId:          jobId(),
+            extractionMethod: 'json-ld'
           }
         }
       } catch {}
@@ -141,7 +142,8 @@
       recruiterTitle,
       companyWebsite: '',
       platform:       'linkedin',
-      jobId:          jobId()
+      jobId:          jobId(),
+      extractionMethod: 'dom'
     }
   }
 
@@ -153,7 +155,8 @@
       title: tc.title, company: tc.company,
       location: '', salary: '', description: '',
       recruiterEmail: '', companyWebsite: '',
-      platform: 'linkedin', jobId: jobId()
+      platform: 'linkedin', jobId: jobId(),
+      extractionMethod: 'title-only'
     }
   }
 

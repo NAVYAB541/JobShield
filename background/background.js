@@ -251,6 +251,7 @@ async function handleAnalysis(job, sender) {
     flags: heuristic.flags,
     greenFlags: heuristic.greenFlags,
     aiResult: null,
+    extractionMethod: job.extractionMethod || 'dom',
     job: { title: job.title, company: job.company, platform: job.platform }
   }
 
