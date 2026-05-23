@@ -154,7 +154,9 @@ function analyseJob(job) {
   if (tgtCount >= 2) flags.push({ id:'tgtb_high', label:'Multiple "too good to be true" phrases', weight:12 })
   else if (tgtCount === 1) flags.push({ id:'tgtb_low', label:'"Too good to be true" language detected', weight:4 })
 
-  if (countMatches(salary, VAGUE_SALARY_PHRASES) > 0 || !salary.trim() || salary === 'not specified')
+  // only flag if no salary number found in the dedicated field OR description body
+  const salaryNumberAnywhere = /\$[\d,]+|\d+\s*k\b|\d{2,3},\d{3}/.test(salary + ' ' + desc)
+  if (!salaryNumberAnywhere && (countMatches(salary, VAGUE_SALARY_PHRASES) > 0 || !salary.trim()))
     flags.push({ id:'vague_salary', label:'Salary is vague or not listed', weight:1 })
 
   const wordCount = (job.description || '').trim().split(/\s+/).filter(Boolean).length
@@ -238,7 +240,7 @@ function analyseJob(job) {
     greenFlags.push(`Detailed description (${wordCount} words)`)
 
   if (job.company && !isGenericCompany)
-    greenFlags.push(`Named company: ${job.company}`)
+    greenFlags.push(`Company: ${job.company}`)
 
   if (job.location && job.location.trim())
     greenFlags.push(`Location: ${job.location}`)
