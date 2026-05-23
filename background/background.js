@@ -72,6 +72,29 @@ function normalise(t) {
 }
 function countMatches(text, phrases) { return phrases.filter(p => text.includes(p)).length }
 
+// \u2500\u2500 Salary parser \u2014 returns estimated annual figure or null \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+function parseSalaryAnnual(str) {
+  if (!str) return null
+  const s = str.toLowerCase()
+  const isHourly = /\/hr\b|per.?hour|hourly|p\/h\b/.test(s)
+
+  // Extract numbers, respecting k-suffix (90k \u2192 90000)
+  const nums = []
+  const re = /(\d[\d,]*)(\s*k)?/g
+  let m
+  while ((m = re.exec(s)) !== null) {
+    let v = parseFloat(m[1].replace(/,/g, ''))
+    if (m[2] && m[2].trim() === 'k') v *= 1000
+    if (v > 0) nums.push(v)
+  }
+  if (!nums.length) return null
+
+  const peak = Math.max(...nums)
+  if (isHourly) return Math.round(peak * 2080)   // standard 2080 hr work year
+  if (peak < 500) return null                      // unrecognised / ambiguous
+  return peak
+}
+
 function analyseJob(job) {
   const desc     = normalise(job.description)
   const title    = normalise(job.title)
@@ -144,6 +167,22 @@ function analyseJob(job) {
     const rt = normalise(job.recruiterTitle)
     if (JOB_SEEKER_PHRASES.some(p => rt.includes(p)))
       flags.push({ id:'poster_job_seeker', label:'Job poster appears to be a job-seeker, not a recruiter', weight:15 })
+  }
+
+  // ── Salary sanity analysis ──
+  const annualSalary = parseSalaryAnnual(job.salary)
+  if (annualSalary !== null) {
+    const isEntryLevel   = /\b(graduate|entry.?level|junior|intern|fresh graduate)\b/.test(fullText)
+    const isNoExperience = /\bno experience\b/.test(fullText)
+    const isFullTime     = /\bfull.?time\b/.test(fullText)
+
+    if (isNoExperience && annualSalary > 150000)
+      flags.push({ id:'unrealistic_salary', label:`Salary too high for a "no experience" role (${job.salary})`, weight:15 })
+    else if (isEntryLevel && annualSalary > 200000)
+      flags.push({ id:'unrealistic_salary', label:`Salary unrealistically high for entry-level role (${job.salary})`, weight:12 })
+
+    if (isFullTime && annualSalary < 30000)
+      flags.push({ id:'below_minimum', label:`Salary appears below minimum wage for full-time role (${job.salary})`, weight:10 })
   }
 
   const score = flags.reduce((s, f) => s + f.weight, 0)
