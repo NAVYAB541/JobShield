@@ -8,74 +8,122 @@
 </head>
 <body>
   <div class="shell">
-    <!-- Header -->
+
+    <!-- decorative bg layers -->
+    <div class="bg-grid" aria-hidden="true"></div>
+    <div class="scanline" aria-hidden="true"></div>
+
+    <!-- ── Header ── -->
     <header>
       <div class="logo">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-        </svg>
-        <span>JobShield</span>
+        <div class="logo-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          </svg>
+        </div>
+        <span class="logo-text">Job<span class="logo-accent">Shield</span></span>
+        <span class="logo-tag">v1.0</span>
       </div>
       <button id="settings-btn" class="icon-btn" title="Settings">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="3"/>
           <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
         </svg>
       </button>
     </header>
 
-    <!-- Main view -->
+    <!-- ── Main view ── -->
     <main id="main-view">
-      <!-- idle state -->
+
+      <!-- Idle state -->
       <div id="idle-state" class="state-block">
-        <div class="idle-icon">🛡️</div>
-        <p class="idle-text">Navigate to a job posting on LinkedIn, Indeed, or Seek to see its risk analysis.</p>
-        <div class="supported-sites">
-          <span class="site-chip linkedin">LinkedIn</span>
-          <span class="site-chip indeed">Indeed</span>
-          <span class="site-chip seek">Seek</span>
+        <div class="idle-shield-wrap">
+          <div class="idle-shield">
+            <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>
+          </div>
+          <div class="idle-ring r1"></div>
+          <div class="idle-ring r2"></div>
+        </div>
+        <p class="idle-title">SYSTEM READY</p>
+        <p class="idle-sub">Navigate to a job posting to begin threat analysis</p>
+        <div class="site-chips">
+          <span class="chip chip-li">LinkedIn</span>
+          <span class="chip chip-in">Indeed</span>
+          <span class="chip chip-sk">Seek</span>
         </div>
       </div>
 
-      <!-- result state -->
+      <!-- Result state -->
       <div id="result-state" class="state-block hidden">
-        <!-- risk header -->
-        <div id="risk-header" class="risk-header">
-          <div class="risk-left">
-            <span id="risk-emoji" class="risk-emoji"></span>
-            <div>
-              <div id="risk-level" class="risk-level"></div>
-              <div id="job-info" class="job-info"></div>
+
+        <!-- Risk card -->
+        <div id="risk-card" class="risk-card">
+          <div class="risk-card-top">
+            <div class="risk-left">
+              <div id="risk-icon" class="risk-icon"></div>
+              <div class="risk-text-col">
+                <div id="risk-label" class="risk-label"></div>
+                <div id="job-title-small" class="job-title-small"></div>
+              </div>
+            </div>
+            <!-- circular gauge -->
+            <div class="gauge-wrap">
+              <svg class="gauge-svg" viewBox="0 0 36 36">
+                <circle class="gauge-track" cx="18" cy="18" r="14" fill="none" stroke-width="3"/>
+                <circle id="gauge-arc" class="gauge-arc" cx="18" cy="18" r="14" fill="none" stroke-width="3"
+                  stroke-dasharray="88 88" stroke-dashoffset="22" stroke-linecap="round"
+                  transform="rotate(-90 18 18)"/>
+              </svg>
+              <span id="score-val" class="gauge-val"></span>
             </div>
           </div>
-          <div id="score-circle" class="score-circle">
-            <span id="score-val"></span>
+
+          <!-- threat bar -->
+          <div class="threat-wrap">
+            <div class="threat-labels">
+              <span class="mono-xs">THREAT LEVEL</span>
+              <span id="threat-pct" class="mono-xs"></span>
+            </div>
+            <div class="threat-track">
+              <div id="threat-fill" class="threat-fill"></div>
+            </div>
           </div>
         </div>
 
-        <!-- AI summary -->
-        <div id="ai-summary" class="ai-summary hidden">
-          <div class="section-label">AI Analysis</div>
-          <p id="ai-summary-text"></p>
+        <!-- AI panel -->
+        <div id="ai-panel" class="glass-panel hidden">
+          <div class="panel-head">
+            <span class="dot dot-cyan"></span>
+            <span class="mono-label">AI_ANALYSIS</span>
+          </div>
+          <p id="ai-text" class="panel-body-text"></p>
         </div>
 
-        <!-- flags -->
-        <div id="flags-section" class="flags-section">
-          <div class="section-label">Risk Signals</div>
+        <!-- Risk signals panel -->
+        <div id="flags-panel" class="glass-panel">
+          <div class="panel-head">
+            <span class="dot dot-amber"></span>
+            <span class="mono-label">RISK_SIGNALS</span>
+            <span id="flag-count" class="flag-count"></span>
+          </div>
           <ul id="flags-list" class="flags-list"></ul>
         </div>
 
-        <!-- no flags -->
-        <div id="no-flags" class="no-flags hidden">
-          <span>✅</span> No suspicious signals detected.
+        <!-- All-clear panel -->
+        <div id="clear-panel" class="glass-panel clear-panel hidden">
+          <span class="clear-check">✓</span>
+          <span>No suspicious signals detected</span>
         </div>
 
-        <!-- platform -->
-        <div id="platform-tag" class="platform-tag"></div>
+        <!-- Footer -->
+        <div id="platform-footer" class="platform-footer"></div>
       </div>
+
     </main>
 
-    <!-- Settings view -->
+    <!-- ── Settings view ── -->
     <section id="settings-view" class="hidden">
       <div class="settings-header">
         <button id="back-btn" class="icon-btn">
@@ -83,26 +131,37 @@
             <polyline points="15 18 9 12 15 6"/>
           </svg>
         </button>
-        <span>Settings</span>
+        <span class="mono-label" style="font-size:12px;letter-spacing:.14em">SETTINGS</span>
       </div>
 
       <div class="settings-body">
-        <label class="field-label" for="api-key-input">Groq API Key <span class="optional">(optional — enables AI analysis)</span></label>
-        <input id="api-key-input" type="password" class="text-input" placeholder="gsk_..." autocomplete="off" />
-        <p class="field-hint">Used only for medium-risk jobs. Never sent anywhere except Groq's API.</p>
-        <button id="save-key-btn" class="btn-primary">Save Key</button>
-        <p id="save-status" class="save-status hidden">Saved!</p>
+        <div class="field-group">
+          <label class="field-label" for="api-key-input">
+            GROQ API KEY
+            <span class="field-tag">optional</span>
+          </label>
+          <input id="api-key-input" type="password" class="cyber-input" placeholder="gsk_•••••••••••" autocomplete="off" />
+          <p class="field-hint">Enables AI analysis for borderline jobs. Sent only to Groq's API.</p>
+        </div>
 
-        <div class="divider"></div>
+        <button id="save-key-btn" class="cyber-btn">SAVE KEY</button>
+        <p id="save-status" class="save-ok hidden">// key saved ✓</p>
 
-        <div class="about">
-          <strong>JobShield v1.0</strong>
-          <p>Scam risk detector for LinkedIn, Indeed &amp; Seek. Heuristics run locally. AI analysis via Groq (optional).</p>
+        <div class="settings-sep"></div>
+
+        <div class="about-block">
+          <div class="mono-label" style="margin-bottom:6px">ABOUT</div>
+          <p class="about-text">JobShield analyses job postings for scam signals using a local heuristics engine + optional Groq AI. No data is collected.</p>
+          <div class="site-chips" style="margin-top:10px">
+            <span class="chip chip-li">LinkedIn</span>
+            <span class="chip chip-in">Indeed</span>
+            <span class="chip chip-sk">Seek</span>
+          </div>
         </div>
       </div>
     </section>
-  </div>
 
+  </div>
   <script src="popup.js"></script>
 </body>
 </html>
