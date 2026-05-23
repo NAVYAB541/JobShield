@@ -112,11 +112,20 @@ function init() {
   chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
     if (!tab) { showIdle(); return }
 
-    // Load stored result for this tab
     chrome.runtime.sendMessage({ type: 'GET_LAST_RESULT' }, (result) => {
       if (chrome.runtime.lastError || !result) {
         showIdle()
-        // No result yet — inject scripts so it works without a page refresh
+        injectIfNeeded(tab.id, tab.url)
+        return
+      }
+
+      // Check stored result belongs to the current job page
+      const tabJobId     = (tab.url?.match(/\/jobs\/view\/(\d+)/) || [])[1]
+      const storedJobId  = result.job?.jobId
+      const isStale      = tabJobId && storedJobId && String(tabJobId) !== String(storedJobId)
+
+      if (isStale) {
+        showIdle()
         injectIfNeeded(tab.id, tab.url)
       } else {
         showResult(result)

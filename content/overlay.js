@@ -122,6 +122,8 @@
       </div>
     `
     document.body.appendChild(el)
+    // Auto-dismiss scanning badge after 12s if no result arrives
+    setTimeout(() => { if (document.getElementById(ID) === el) remove() }, 12000)
   }
 
   window.addEventListener('jobshield:loading', loadingBadge)
