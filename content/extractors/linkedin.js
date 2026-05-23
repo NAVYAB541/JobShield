@@ -1,53 +1,58 @@
 (function () {
-  // Prevent double-injection if script runs twice on same page
-  if (window.__jobshieldRunning) return
-  window.__jobshieldRunning = true
+  // If already polling for this exact job, skip
+  const currentId = (window.location.pathname.match(/\/jobs\/view\/(\d+)/) || [])[1]
+  if (window.__jobshieldJobId === currentId && currentId) return
+  window.__jobshieldJobId = currentId
 
   const POLL_INTERVAL = 1000
   const MAX_ATTEMPTS  = 25
   let attempts = 0
-  let lastAnalysedJobId = null
 
   function jobId() {
-    const m = window.location.pathname.match(/\/jobs\/view\/(\d+)/)
-    return m ? m[1] : null
+    return (window.location.pathname.match(/\/jobs\/view\/(\d+)/) || [])[1] || null
   }
 
-  function stripHtml(html) {
-    return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+  function stripHtml(h) {
+    return h.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
   }
 
-  // Method 1: JSON-LD structured data embedded by LinkedIn — most reliable
+  // ── Method 1: page <title> (always available, zero DOM scraping) ──
+  // LinkedIn format: "Job Title | Company Name | LinkedIn"
+  function titleAndCompany() {
+    const parts = document.title.replace(' | LinkedIn', '').split(' | ')
+    return {
+      title:   parts[0]?.trim() || '',
+      company: parts[1]?.trim() || ''
+    }
+  }
+
+  // ── Method 2: JSON-LD structured data ──
   function fromJsonLd() {
-    const scripts = document.querySelectorAll('script[type="application/ld+json"]')
-    for (const s of scripts) {
+    for (const s of document.querySelectorAll('script[type="application/ld+json"]')) {
       try {
-        const d = JSON.parse(s.textContent)
-        const job = Array.isArray(d) ? d.find(x => x['@type'] === 'JobPosting') : d
-        if (job?.['@type'] === 'JobPosting' && job.title) {
-          const loc = job.jobLocation
+        const raw = JSON.parse(s.textContent)
+        const d   = Array.isArray(raw) ? raw.find(x => x['@type'] === 'JobPosting') : raw
+        if (d?.['@type'] === 'JobPosting' && d.title) {
+          const loc = d.jobLocation
           const location = [
             loc?.address?.addressLocality,
             loc?.address?.addressRegion,
             loc?.address?.addressCountry
           ].filter(Boolean).join(', ')
 
-          let salary = ''
-          if (job.baseSalary?.value) {
-            const v = job.baseSalary.value
-            salary = v.minValue && v.maxValue
-              ? `$${v.minValue}–$${v.maxValue} ${v.unitText || ''}`.trim()
-              : `$${v.value || ''} ${v.unitText || ''}`.trim()
-          }
+          const bv = d.baseSalary?.value
+          const salary = bv
+            ? (bv.minValue && bv.maxValue ? `$${bv.minValue}–$${bv.maxValue}` : `$${bv.value || ''}`)
+            : ''
 
           return {
-            title:          job.title,
-            company:        job.hiringOrganization?.name || '',
+            title:          d.title,
+            company:        d.hiringOrganization?.name || '',
             location,
             salary,
-            description:    stripHtml(job.description || ''),
+            description:    stripHtml(d.description || ''),
             recruiterEmail: '',
-            companyWebsite: job.hiringOrganization?.sameAs || '',
+            companyWebsite: d.hiringOrganization?.sameAs || '',
             platform:       'linkedin',
             jobId:          jobId()
           }
@@ -57,38 +62,38 @@
     return null
   }
 
-  // Method 2: DOM scraping fallback
+  // ── Method 3: DOM scraping fallback ──
   function fromDom() {
-    function text(selectors) {
-      for (const s of selectors) {
-        const el = document.querySelector(s)
-        if (el?.innerText?.trim()) return el.innerText.trim()
-      }
-      return ''
-    }
-
-    const title = text([
-      '.job-details-jobs-unified-top-card__job-title h1',
-      '.jobs-unified-top-card__job-title h1',
-      'h1.t-24', 'h1'
-    ])
+    const tc    = titleAndCompany()
+    const title = tc.title || document.querySelector('h1')?.innerText?.trim() || ''
+    if (!title) return null
 
     const descEl = (
       document.querySelector('#job-details') ||
       document.querySelector('.jobs-description__content') ||
-      document.querySelector('[class*="jobs-description"]')
+      document.querySelector('[class*="jobs-description"]') ||
+      document.querySelector('article')
     )
+    const desc = descEl?.innerText?.trim() || ''
+    // Accept even short descriptions — something is better than nothing
+    if (!desc) return null
 
-    if (!title || !descEl || descEl.innerText.trim().length < 50) return null
+    const emailMatch = desc.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/)
 
-    const emailMatch = descEl.innerText.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/)
+    function text(sels) {
+      for (const s of sels) {
+        const t = document.querySelector(s)?.innerText?.trim()
+        if (t) return t
+      }
+      return ''
+    }
 
     return {
       title,
-      company:        text(['.job-details-jobs-unified-top-card__company-name a', '.jobs-unified-top-card__company-name a', 'a[href*="/company/"]']),
+      company:        tc.company || text(['.jobs-unified-top-card__company-name a', 'a[href*="/company/"]']),
       location:       text(['.job-details-jobs-unified-top-card__bullet', '.jobs-unified-top-card__bullet']),
       salary:         text(['.compensation__salary', '[class*="salary"]']),
-      description:    descEl.innerText.trim(),
+      description:    desc,
       recruiterEmail: emailMatch ? emailMatch[0] : '',
       companyWebsite: '',
       platform:       'linkedin',
@@ -96,16 +101,30 @@
     }
   }
 
+  // ── Method 4: last resort — title only, empty description ──
+  function fromTitleOnly() {
+    const tc = titleAndCompany()
+    if (!tc.title || tc.title === 'LinkedIn') return null
+    return {
+      title:          tc.title,
+      company:        tc.company,
+      location:       '',
+      salary:         '',
+      description:    '',
+      recruiterEmail: '',
+      companyWebsite: '',
+      platform:       'linkedin',
+      jobId:          jobId()
+    }
+  }
+
   function extractJob() {
-    return fromJsonLd() || fromDom()
+    return fromJsonLd() || fromDom() || fromTitleOnly()
   }
 
   function poll() {
     if (attempts >= MAX_ATTEMPTS) return
     attempts++
-
-    const id = jobId()
-    if (id && id === lastAnalysedJobId) return
 
     const job = extractJob()
     if (!job) {
@@ -113,12 +132,9 @@
       return
     }
 
-    lastAnalysedJobId = id
     window.dispatchEvent(new CustomEvent('jobshield:loading'))
-
     chrome.runtime.sendMessage({ type: 'ANALYSE_JOB', job }, (response) => {
-      if (chrome.runtime.lastError) return
-      if (!response) return
+      if (chrome.runtime.lastError || !response) return
       window.dispatchEvent(new CustomEvent('jobshield:result', { detail: response }))
     })
   }
@@ -126,16 +142,17 @@
   // URL polling for SPA navigation
   let lastHref = window.location.href
   setInterval(() => {
-    const current = window.location.href
-    if (current !== lastHref) {
-      lastHref = current
+    const cur = window.location.href
+    if (cur !== lastHref) {
+      lastHref = cur
       attempts = 0
-      lastAnalysedJobId = null
+      window.__jobshieldJobId = null
       window.dispatchEvent(new CustomEvent('jobshield:clear'))
       chrome.storage.local.remove('lastResult')
       setTimeout(poll, 1500)
     }
   }, 800)
 
-  setTimeout(poll, 1500)
+  // Start immediately — don't wait for DOM if title already available
+  poll()
 })()
