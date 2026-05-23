@@ -1,4 +1,7 @@
 (function () {
+  // Only run on job view pages
+  if (!/\/jobs\/view\/\d+/.test(window.location.pathname)) return
+
   // If already polling for this exact job, skip
   const currentId = (window.location.pathname.match(/\/jobs\/view\/(\d+)/) || [])[1]
   if (window.__jobshieldJobId === currentId && currentId) return
@@ -158,24 +161,26 @@
     }
 
     window.dispatchEvent(new CustomEvent('jobshield:loading'))
-    chrome.runtime.sendMessage({ type: 'ANALYSE_JOB', job }, (response) => {
-      if (chrome.runtime.lastError || !response) return
-      window.dispatchEvent(new CustomEvent('jobshield:result', { detail: response }))
-    })
+    try {
+      chrome.runtime.sendMessage({ type: 'ANALYSE_JOB', job }, (response) => {
+        if (chrome.runtime.lastError || !response) return
+        window.dispatchEvent(new CustomEvent('jobshield:result', { detail: response }))
+      })
+    } catch {}
   }
 
   // URL polling for SPA navigation
   let lastHref = window.location.href
   setInterval(() => {
     const cur = window.location.href
-    if (cur !== lastHref) {
-      lastHref = cur
-      attempts = 0
-      window.__jobshieldJobId = null
-      window.dispatchEvent(new CustomEvent('jobshield:clear'))
-      chrome.storage.local.remove('lastResult')
-      setTimeout(poll, 1500)
-    }
+    if (cur === lastHref) return
+    lastHref = cur
+    attempts = 0
+    window.__jobshieldJobId = null
+    window.dispatchEvent(new CustomEvent('jobshield:clear'))
+    try { chrome.storage?.local?.remove('lastResult') } catch {}
+    // Only re-poll if we navigated to another job page
+    if (/\/jobs\/view\/\d+/.test(cur)) setTimeout(poll, 1500)
   }, 800)
 
   // Start immediately — don't wait for DOM if title already available
