@@ -7,9 +7,9 @@ const SCAM_TITLE_KEYWORDS = [
   'data entry', 'typing job', 'copy paste', 'form filling', 'online work',
   'home based work', 'home based job', 'work at home', 'earn from home',
   'earn money online', 'make money online', 'online earning', 'income opportunity',
-  // MLM / commission only
+  // MLM / network marketing
   'brand ambassador', 'brand promoter', 'sales promoter', 'network marketer',
-  'affiliate marketer', 'mlm', 'multi level', 'direct sales', 'commission only',
+  'affiliate marketer', 'mlm', 'multi level', 'direct sales',
   // Unrealistic earnings
   'earn up to', 'make up to', 'up to $', '$/hour easy', 'easy cash',
   'financial freedom', 'be your own boss', 'set your own hours',
@@ -90,6 +90,67 @@ function normalise(t) {
 }
 function countMatches(text, phrases) { return phrases.filter(p => text.includes(p)).length }
 
+// returns job context used for multiplier-based scoring
+function classifyJob(job) {
+  const t    = normalise(job.title || '')
+  const full = t + ' ' + normalise(job.description || '')
+
+  let roleType = 'general'
+  if (/\b(software|developer|engineer|devops|data scientist|cloud engineer|security engineer|frontend|backend|fullstack|ml engineer|ai engineer)\b/.test(t)) roleType = 'tech'
+  else if (/\b(chef|barista|waiter|waitress|cook|bartender|hospitality|kitchen|cafe|restaurant)\b/.test(t)) roleType = 'hospitality'
+  else if (/\b(retail|cashier|shop assistant|sales assistant|store person)\b/.test(t)) roleType = 'retail'
+  else if (/\b(delivery driver|courier|cleaner|plumber|electrician|labourer|warehouse|picker|packer)\b/.test(t)) roleType = 'trades'
+  else if (/\b(nurse|doctor|physio|pharmacist|aged care|healthcare|support worker|carer|therapist)\b/.test(t)) roleType = 'healthcare'
+  else if (/\b(analyst|coordinator|administrator|accountant|hr manager|executive assistant|office manager)\b/.test(t)) roleType = 'corporate'
+  else if (/\b(freelance|contractor|content creator|influencer|affiliate|ugc creator)\b/.test(t)) roleType = 'gig'
+  else if (/\b(graduate|intern|trainee|cadet|apprentice)\b/.test(t)) roleType = 'graduate'
+
+  let seniority = 'mid'
+  if (/\b(graduate|intern|trainee|junior|entry.?level|cadet|apprentice)\b/.test(full)) seniority = 'junior'
+  else if (/\b(senior|lead|principal|staff engineer|head of|director)\b/.test(full)) seniority = 'senior'
+  else if (/\b(vp |vice president|cto|ceo|chief|managing director)\b/.test(full)) seniority = 'executive'
+
+  let employmentType = 'unknown'
+  if (/\bfull.?time\b/.test(full)) employmentType = 'full_time'
+  else if (/\bpart.?time\b/.test(full)) employmentType = 'part_time'
+  else if (/\b(contract|fixed.?term)\b/.test(full)) employmentType = 'contract'
+  else if (/\bcasual\b/.test(full)) employmentType = 'casual'
+
+  let region = 'unknown'
+  if (job.platform === 'seek') region = 'AU'
+  else if (/\b(australia|sydney|melbourne|brisbane|perth|adelaide)\b/i.test(job.location || '')) region = 'AU'
+  else if (/\b(united states|new york|san francisco|seattle|boston|usa)\b/i.test(job.location || '')) region = 'US'
+  else if (/\b(united kingdom|london|manchester)\b/i.test(job.location || '')) region = 'UK'
+
+  return { roleType, seniority, employmentType, region }
+}
+
+// per-flag multipliers by role type \u2014 0 suppresses the flag entirely
+const CONTEXT_MULTIPLIERS = {
+  // commission_only: suspicious in tech/corporate, normal in gig/sales
+  commission_only: { tech:1.5, corporate:1.4, graduate:1.3, hospitality:0.3, retail:0.5, trades:0.3, healthcare:0.2, gig:0.2, general:1.0 },
+  free_email:      { tech:1.5, corporate:1.3, graduate:1.2, hospitality:0.3, retail:0.3, trades:0.4, healthcare:0.5, gig:0.6, general:1.0 },
+  email_mismatch:  { tech:1.3, corporate:1.2, graduate:1.0, hospitality:0.2, retail:0.2, trades:0.3, healthcare:0.4, gig:0.5, general:1.0 },
+  urgency_high:    { tech:1.3, corporate:1.2, graduate:1.4, hospitality:0.2, retail:0.3, trades:0.4, healthcare:0.3, gig:0.7, general:1.0 },
+  urgency_low:     { tech:1.0, corporate:1.0, graduate:1.0, hospitality:0.0, retail:0.0, trades:0.1, healthcare:0.1, gig:0.4, general:1.0 },
+  short_desc:      { tech:1.2, corporate:1.0, graduate:1.0, hospitality:0.0, retail:0.0, trades:0.1, healthcare:0.4, gig:0.4, general:1.0 },
+  vague_salary:    { tech:1.0, corporate:1.0, graduate:1.0, hospitality:0.0, retail:0.0, trades:0.2, healthcare:0.3, gig:0.0, general:1.0 },
+  remote_entry:    { tech:1.0, corporate:1.0, graduate:1.2, hospitality:0.0, retail:0.0, trades:0.0, healthcare:0.0, gig:0.2, general:1.0 },
+  tgtb_low:        { tech:1.2, corporate:1.0, graduate:1.0, hospitality:0.2, retail:0.2, trades:0.2, healthcare:0.3, gig:0.1, general:1.0 },
+  tgtb_high:       { tech:1.2, corporate:1.0, graduate:1.0, hospitality:0.3, retail:0.3, trades:0.3, healthcare:0.4, gig:0.2, general:1.0 },
+  generic_company: { tech:1.2, corporate:0.7, graduate:1.0, hospitality:0.4, retail:0.4, trades:0.4, healthcare:0.5, gig:0.6, general:1.0 },
+}
+
+function applyContext(flags, context) {
+  return flags
+    .map(f => {
+      const row = CONTEXT_MULTIPLIERS[f.id]
+      const multiplier = row ? (row[context.roleType] ?? row.general ?? 1.0) : 1.0
+      return { ...f, weight: Math.round(f.weight * multiplier) }
+    })
+    .filter(f => f.weight > 0)
+}
+
 // \u2500\u2500 Salary parser \u2014 returns estimated annual figure or null \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 function parseSalaryAnnual(str) {
   if (!str) return null
@@ -120,6 +181,7 @@ function analyseJob(job) {
   const email    = normalise(job.recruiterEmail || '')
   const fullText = [desc, title, salary].join(' ')
   const flags    = []
+  const context  = classifyJob(job)
 
   // ── Title keyword analysis ──
   const scamTitleMatch = SCAM_TITLE_KEYWORDS.find(k => title.includes(k))
@@ -153,6 +215,9 @@ function analyseJob(job) {
   const tgtCount = countMatches(fullText, TOO_GOOD_PHRASES)
   if (tgtCount >= 2) flags.push({ id:'tgtb_high', label:'Multiple "too good to be true" phrases', weight:12 })
   else if (tgtCount === 1) flags.push({ id:'tgtb_low', label:'"Too good to be true" language detected', weight:4 })
+
+  if (/\bcommission.?only\b/i.test(fullText))
+    flags.push({ id:'commission_only', label:'Commission-only compensation — verify this is appropriate for the role', weight:8 })
 
   // only flag if no salary number found in the dedicated field OR description body
   const salaryNumberAnywhere = /\$[\d,]+|\d+\s*k\b|\d{2,3},\d{3}/.test(salary + ' ' + desc)
@@ -224,7 +289,9 @@ function analyseJob(job) {
       flags.push({ id:'below_minimum', label:`Salary appears below minimum wage for full-time role (${job.salary})`, weight:10 })
   }
 
-  const score = flags.reduce((s, f) => s + f.weight, 0)
+  // apply context multipliers — suppresses or boosts each flag weight by role type
+  const adjustedFlags = applyContext(flags, context)
+  const score = adjustedFlags.reduce((s, f) => s + f.weight, 0)
 
   // ── Green flags (positive signals) ──
   const greenFlags = []
@@ -263,7 +330,7 @@ function analyseJob(job) {
   if (/\b(years?.{1,10}experience|bachelor|degree|required skills|must have|essential)\b/.test(desc))
     greenFlags.push('Clear requirements specified')
 
-  return { score, level: score >= 25 ? 'high' : score >= 12 ? 'medium' : 'low', flags, greenFlags }
+  return { score, level: score >= 25 ? 'high' : score >= 12 ? 'medium' : 'low', flags: adjustedFlags, greenFlags, context }
 }
 
 // ─── Groq AI client (inlined) ─────────────────────────────────────────────────
@@ -334,6 +401,7 @@ async function handleAnalysis(job, sender) {
     score: Math.min(heuristic.score, 100),
     flags: heuristic.flags,
     greenFlags: heuristic.greenFlags,
+    context: heuristic.context,
     aiResult: null,
     extractionMethod: job.extractionMethod || 'dom',
     job: { title: job.title, company: job.company, platform: job.platform }

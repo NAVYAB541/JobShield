@@ -381,6 +381,13 @@ main { padding: 14px; }
   border: 1px solid rgba(255,184,0,0.2);
 }
 
+.context-footer {
+  font-family: var(--font-mono);
+  font-size: 9px; letter-spacing: .07em;
+  color: var(--cyan); opacity: .45;
+  margin-top: 4px;
+}
+
 .platform-footer {
   font-family: var(--font-mono);
   font-size: 9px; letter-spacing: .08em;

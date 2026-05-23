@@ -112,6 +112,22 @@ function showResult(result) {
     extEl.classList.add('hidden')
   }
 
+  // ── Context chip ──
+  const ctx = result.context
+  const ctxParts = [
+    ctx?.roleType !== 'general' ? ctx?.roleType : null,
+    ctx?.seniority !== 'mid'    ? ctx?.seniority : null,
+    ctx?.employmentType !== 'unknown' ? ctx?.employmentType.replace('_', '-') : null,
+    ctx?.region !== 'unknown'   ? ctx?.region : null
+  ].filter(Boolean)
+  const ctxEl = $('context-footer')
+  if (ctxParts.length) {
+    ctxEl.textContent = `// detected: ${ctxParts.join(' · ')}`
+    ctxEl.classList.remove('hidden')
+  } else {
+    ctxEl.classList.add('hidden')
+  }
+
   // ── Footer ──
   const platform = job?.platform
   $('platform-footer').textContent = platform
