@@ -233,8 +233,14 @@ function analyseJob(job) {
   if (legitTitle && !scamTitleMatch)
     greenFlags.push(`Recognised role title: "${job.title}"`)
 
-  if (/\$[\d,]+|\d+\s*k\b|\d{2,3},\d{3}/.test(job.salary || ''))
-    greenFlags.push(`Salary specified: ${job.salary}`)
+  // prefer dedicated salary field, fall back to extracting a snippet from description
+  const salaryDisplay = (() => {
+    if (/\$[\d,]+|\d+\s*k\b|\d{2,3},\d{3}/.test(job.salary || '')) return job.salary
+    const m = (job.description || '').match(/\$[\d,]+(?:\s*[-–]\s*\$[\d,]+)?(?:\s*(?:per|\/)\s*(?:year|annum|yr|hr|hour))?/i)
+    return m ? m[0].trim() : null
+  })()
+  if (salaryDisplay)
+    greenFlags.push(`Salary listed: ${salaryDisplay}`)
 
   if (wordCount >= 300)
     greenFlags.push(`Detailed description (${wordCount} words)`)
