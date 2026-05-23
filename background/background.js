@@ -1,109 +1,182 @@
-// Service worker — orchestrates heuristics + optional Groq AI analysis.
-// Receives ANALYSE_JOB messages from content scripts.
+// ─── Heuristics engine (inlined to avoid importScripts path issues) ───────────
 
-importScripts('../lib/heuristics.js')
-importScripts('../lib/groq.js')
+const FREE_EMAIL_DOMAINS = [
+  'gmail.com','yahoo.com','hotmail.com','outlook.com','aol.com',
+  'protonmail.com','icloud.com','mail.com','ymail.com','live.com','msn.com'
+]
+const URGENCY_PHRASES = [
+  'urgent','immediate hire','immediate start','start today','start immediately',
+  'asap','apply now before','limited spots','only a few positions',
+  'must start this week','quick hire','same day offer','instant offer','instant hire'
+]
+const MONEY_REQUEST_PHRASES = [
+  'training fee','registration fee','background check fee','purchase equipment',
+  'buy your own equipment','starter kit','pay for training','refundable deposit',
+  'processing fee','admin fee','security deposit'
+]
+const TOO_GOOD_PHRASES = [
+  'work from home','set your own hours','be your own boss','no experience needed',
+  'no experience required','no qualifications','earn from home','unlimited earning',
+  'financial freedom','passive income','work 2 hours a day'
+]
+const VAGUE_SALARY_PHRASES = [
+  'competitive salary','market rate','tbd','to be discussed',
+  'negotiable','based on experience','attractive package'
+]
 
-// cache recent results to avoid re-analysing the same job
+function normalise(t) { return (t || '').toLowerCase() }
+function countMatches(text, phrases) { return phrases.filter(p => text.includes(p)).length }
+
+function analyseJob(job) {
+  const desc     = normalise(job.description)
+  const title    = normalise(job.title)
+  const salary   = normalise(job.salary || '')
+  const email    = normalise(job.recruiterEmail || '')
+  const fullText = [desc, title, salary].join(' ')
+  const flags    = []
+
+  const emails = (fullText + ' ' + email).match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g) || []
+  const freeEmails = emails.filter(e => FREE_EMAIL_DOMAINS.some(d => e.endsWith('@' + d)))
+  if (freeEmails.length > 0)
+    flags.push({ id:'free_email', label:`Recruiter uses free email (${freeEmails[0]})`, weight:15 })
+
+  if (job.recruiterEmail && job.company) {
+    const domain     = (job.recruiterEmail.split('@')[1] || '').toLowerCase()
+    const domainBase = domain.split('.')[0].replace(/[^a-z0-9]/g,'')
+    const slug       = job.company.toLowerCase().replace(/[^a-z0-9]/g,'')
+    if (domain && !FREE_EMAIL_DOMAINS.includes(domain) && !domainBase.includes(slug.slice(0,5)) && !slug.includes(domainBase))
+      flags.push({ id:'email_mismatch', label:"Recruiter email domain doesn't match company name", weight:8 })
+  }
+
+  const urgencyCount = countMatches(fullText, URGENCY_PHRASES)
+  if (urgencyCount >= 2) flags.push({ id:'urgency_high', label:'Multiple urgency phrases detected', weight:12 })
+  else if (urgencyCount === 1) flags.push({ id:'urgency_low', label:'Urgency language detected', weight:5 })
+
+  if (countMatches(fullText, MONEY_REQUEST_PHRASES) > 0)
+    flags.push({ id:'money_request', label:'Mentions fees, deposits, or equipment purchase', weight:20 })
+
+  const tgtCount = countMatches(fullText, TOO_GOOD_PHRASES)
+  if (tgtCount >= 2) flags.push({ id:'tgtb_high', label:'Multiple "too good to be true" phrases', weight:12 })
+  else if (tgtCount === 1) flags.push({ id:'tgtb_low', label:'"Too good to be true" language detected', weight:4 })
+
+  if (countMatches(salary, VAGUE_SALARY_PHRASES) > 0 || !salary.trim() || salary === 'not specified')
+    flags.push({ id:'vague_salary', label:'Salary is vague or not listed', weight:3 })
+
+  const wordCount = (job.description || '').trim().split(/\s+/).length
+  if (wordCount < 80)
+    flags.push({ id:'short_desc', label:`Job description is very short (${wordCount} words)`, weight:8 })
+
+  if (!job.companyWebsite || !job.companyWebsite.trim())
+    flags.push({ id:'no_website', label:'No company website linked', weight:4 })
+
+  const isEntryLevel = /\b(graduate|entry.?level|junior|no experience)\b/.test(fullText)
+  const isRemote     = /\b(remote|work from home|wfh|fully remote)\b/.test(fullText)
+  if (isEntryLevel && isRemote && !job.location)
+    flags.push({ id:'remote_entry', label:'Remote entry-level with no listed location', weight:5 })
+
+  const genericNames = ['company','confidential','undisclosed','anonymous','private company']
+  if (genericNames.some(n => normalise(job.company || '').includes(n)))
+    flags.push({ id:'generic_company', label:'Company name is generic or confidential', weight:6 })
+
+  const score = flags.reduce((s, f) => s + f.weight, 0)
+  return { score, level: score >= 25 ? 'high' : score >= 12 ? 'medium' : 'low', flags }
+}
+
+// ─── Groq AI client (inlined) ─────────────────────────────────────────────────
+
+const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions'
+const GROQ_MODEL   = 'llama-3.1-70b-versatile'
+const GROQ_SYSTEM  = `You are a job scam detection specialist. Return ONLY valid JSON:
+{"risk_level":"low"|"medium"|"high","confidence":0-100,"flags":["string"],"summary":"1-2 sentences"}`
+
+async function analyseWithGroq(job, apiKey) {
+  if (!apiKey) return null
+  const text = [
+    `Title: ${job.title || 'Unknown'}`,
+    `Company: ${job.company || 'Unknown'}`,
+    `Location: ${job.location || 'Not listed'}`,
+    `Salary: ${job.salary || 'Not listed'}`,
+    `Recruiter email: ${job.recruiterEmail || 'Not shown'}`,
+    `Description:\n${(job.description || '').slice(0, 800)}`
+  ].join('\n')
+
+  try {
+    const res = await fetch(GROQ_API_URL, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: GROQ_MODEL,
+        messages: [{ role:'system', content:GROQ_SYSTEM }, { role:'user', content:`Analyse:\n${text}` }],
+        temperature: 0.1, max_tokens: 300
+      })
+    })
+    if (!res.ok) return null
+    const data    = await res.json()
+    const content = (data.choices?.[0]?.message?.content || '').replace(/```json?\n?/g,'').replace(/```/g,'').trim()
+    return JSON.parse(content)
+  } catch { return null }
+}
+
+// ─── Message handler ──────────────────────────────────────────────────────────
+
 const resultCache = new Map()
 
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.type === 'ANALYSE_JOB') {
-    handleAnalysis(message.job, sender)
-      .then(sendResponse)
-      .catch(() => sendResponse(null))
-    return true // keep channel open for async response
-  }
-
-  if (message.type === 'GET_LAST_RESULT') {
-    chrome.storage.local.get('lastResult', ({ lastResult }) => {
-      sendResponse(lastResult || null)
-    })
+chrome.runtime.onMessage.addListener((msg, sender, reply) => {
+  if (msg.type === 'ANALYSE_JOB') {
+    handleAnalysis(msg.job, sender).then(reply).catch(() => reply(null))
     return true
   }
-
-  if (message.type === 'SAVE_API_KEY') {
-    chrome.storage.local.set({ groqApiKey: message.key }, () => sendResponse({ ok: true }))
+  if (msg.type === 'GET_LAST_RESULT') {
+    chrome.storage.local.get('lastResult', ({ lastResult }) => reply(lastResult || null))
     return true
   }
-
-  if (message.type === 'GET_API_KEY') {
-    chrome.storage.local.get('groqApiKey', ({ groqApiKey }) => sendResponse(groqApiKey || ''))
+  if (msg.type === 'SAVE_API_KEY') {
+    chrome.storage.local.set({ groqApiKey: msg.key }, () => reply({ ok: true }))
+    return true
+  }
+  if (msg.type === 'GET_API_KEY') {
+    chrome.storage.local.get('groqApiKey', ({ groqApiKey }) => reply(groqApiKey || ''))
     return true
   }
 })
 
 async function handleAnalysis(job, sender) {
   const cacheKey = job.jobId || job.jobKey || (job.title + job.company)
-  if (resultCache.has(cacheKey)) {
-    return resultCache.get(cacheKey)
-  }
+  if (resultCache.has(cacheKey)) return resultCache.get(cacheKey)
 
-  // Step 1: heuristics (always runs, instant)
   const heuristic = analyseJob(job)
-
-  let result = {
+  const result = {
     level: heuristic.level,
     score: Math.min(heuristic.score, 100),
     flags: heuristic.flags,
     aiResult: null,
-    job: {
-      title: job.title,
-      company: job.company,
-      platform: job.platform
-    }
+    job: { title: job.title, company: job.company, platform: job.platform }
   }
 
-  // Step 2: AI pass only for medium-risk jobs (borderline)
-  if (heuristic.level === 'medium') {
+  if (heuristic.level === 'medium' || heuristic.level === 'high') {
     const { groqApiKey } = await chrome.storage.local.get('groqApiKey')
     if (groqApiKey) {
-      const aiResult = await analyseWithGroq(job, groqApiKey)
-      if (aiResult) {
-        result.aiResult = aiResult
-        // let AI override level if it's more confident
-        if (aiResult.confidence >= 70) {
-          result.level = aiResult.risk_level
-        }
+      const ai = await analyseWithGroq(job, groqApiKey)
+      if (ai) {
+        result.aiResult = ai
+        if (ai.confidence >= 70) result.level = ai.risk_level
       }
     }
   }
 
-  // also run AI on high-risk posts if key is available (to provide explanation)
-  if (heuristic.level === 'high' && !result.aiResult) {
-    const { groqApiKey } = await chrome.storage.local.get('groqApiKey')
-    if (groqApiKey) {
-      const aiResult = await analyseWithGroq(job, groqApiKey)
-      if (aiResult) result.aiResult = aiResult
-    }
-  }
-
   resultCache.set(cacheKey, result)
-  // cap cache size
-  if (resultCache.size > 50) {
-    const firstKey = resultCache.keys().next().value
-    resultCache.delete(firstKey)
-  }
+  if (resultCache.size > 50) resultCache.delete(resultCache.keys().next().value)
 
-  // persist for popup to read
   await chrome.storage.local.set({ lastResult: result })
-
-  // update extension badge icon
-  updateBadgeIcon(result.level, sender.tab?.id)
-
+  setBadge(result.level, sender.tab?.id)
   return result
 }
 
-function updateBadgeIcon(level, tabId) {
-  const colors = { low: '#22c55e', medium: '#f59e0b', high: '#ef4444' }
-  const labels = { low: 'OK', medium: '!', high: '!!' }
-
+function setBadge(level, tabId) {
+  const colors = { low:'#22c55e', medium:'#f59e0b', high:'#ef4444' }
+  const labels = { low:'OK', medium:'!', high:'!!' }
   const opts = { color: colors[level] || '#64748b', text: labels[level] || '?' }
-  if (tabId) {
-    chrome.action.setBadgeBackgroundColor({ color: opts.color, tabId })
-    chrome.action.setBadgeText({ text: opts.text, tabId })
-  } else {
-    chrome.action.setBadgeBackgroundColor({ color: opts.color })
-    chrome.action.setBadgeText({ text: opts.text })
-  }
+  const target = tabId ? { tabId } : {}
+  chrome.action.setBadgeBackgroundColor({ color: opts.color, ...target })
+  chrome.action.setBadgeText({ text: opts.text, ...target })
 }
