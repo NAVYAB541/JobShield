@@ -57,15 +57,33 @@ const MONEY_REQUEST_PHRASES = [
   'processing fee','admin fee','security deposit'
 ]
 const TOO_GOOD_PHRASES = [
-  // "work from home" removed — remote work is now a normal, legitimate arrangement
   'set your own hours','be your own boss','no experience needed',
   'no experience required','no qualifications','earn from home','unlimited earning',
   'financial freedom','passive income','work 2 hours a day'
 ]
 const VAGUE_SALARY_PHRASES = [
-  // Only truly evasive phrasing — "competitive salary" and "negotiable" are standard
   'tbd','to be discussed','attractive package'
 ]
+
+// phishing-common TLDs
+const SUSPICIOUS_TLDS = [
+  '.xyz','.top','.click','.loan','.work','.date','.bid',
+  '.stream','.download','.racing','.gq','.tk','.ml','.cf','.ga'
+]
+const URL_SHORTENERS = [
+  'bit.ly','tinyurl.com','t.co','goo.gl','ow.ly','short.link','rebrand.ly','is.gd'
+]
+// Known legitimate hiring platforms - skip TLD check for these
+const LEGIT_JOB_PORTALS = [
+  'greenhouse.io','lever.co','workable.com','myworkdayjobs.com',
+  'taleo.net','icims.com','jobvite.com','bamboohr.com','smartrecruiters.com','ashbyhq.com'
+]
+
+function extractDomains(text) {
+  return (text.match(/https?:\/\/[^\s<>"']+/g) || [])
+    .map(u => { try { return new URL(u).hostname.toLowerCase() } catch { return null } })
+    .filter(Boolean)
+}
 
 function normalise(t) {
   return (t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -167,6 +185,25 @@ function analyseJob(job) {
     const rt = normalise(job.recruiterTitle)
     if (JOB_SEEKER_PHRASES.some(p => rt.includes(p)))
       flags.push({ id:'poster_job_seeker', label:'Job poster appears to be a job-seeker, not a recruiter', weight:15 })
+  }
+
+  // ── URL and domain inspection ──
+  const descDomains = extractDomains(job.description || '')
+
+  const suspiciousTld = descDomains.find(
+    d => !LEGIT_JOB_PORTALS.some(p => d.endsWith(p)) && SUSPICIOUS_TLDS.some(t => d.endsWith(t))
+  )
+  if (suspiciousTld)
+    flags.push({ id:'suspicious_url', label:`Link to suspicious domain in description: ${suspiciousTld}`, weight:12 })
+
+  const shortener = descDomains.find(d => URL_SHORTENERS.includes(d))
+  if (shortener)
+    flags.push({ id:'url_shortener', label:`Link uses URL shortener (hides destination): ${shortener}`, weight:10 })
+
+  if (job.recruiterEmail) {
+    const emailDomain = (job.recruiterEmail.split('@')[1] || '').toLowerCase()
+    if (!FREE_EMAIL_DOMAINS.includes(emailDomain) && SUSPICIOUS_TLDS.some(t => emailDomain.endsWith(t)))
+      flags.push({ id:'suspicious_email_domain', label:`Recruiter email uses suspicious domain: ${emailDomain}`, weight:12 })
   }
 
   // ── Salary sanity analysis ──
