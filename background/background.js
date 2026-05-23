@@ -62,7 +62,7 @@ function analyseJob(job) {
   if (countMatches(salary, VAGUE_SALARY_PHRASES) > 0 || !salary.trim() || salary === 'not specified')
     flags.push({ id:'vague_salary', label:'Salary is vague or not listed', weight:3 })
 
-  const wordCount = (job.description || '').trim().split(/\s+/).length
+  const wordCount = (job.description || '').trim().split(/\s+/).filter(Boolean).length
   if (wordCount < 80)
     flags.push({ id:'short_desc', label:`Job description is very short (${wordCount} words)`, weight:8 })
 

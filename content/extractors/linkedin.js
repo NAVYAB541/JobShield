@@ -62,23 +62,51 @@
     return null
   }
 
-  // ── Method 3: DOM scraping fallback ──
+  // ── Method 3: DOM scraping with aggressive description finder ──
+  function findDescription() {
+    // Specific selectors first
+    const specific = [
+      '#job-details',
+      '.jobs-description__content',
+      '.jobs-description-content__text--stretch',
+      '[class*="jobs-description-content__text"]',
+      '[class*="jobs-description"]',
+      '.jobs-box__html-content',
+      'article'
+    ]
+    for (const sel of specific) {
+      const el = document.querySelector(sel)
+      if (el?.innerText?.trim().length > 100) return el.innerText.trim()
+    }
+
+    // Look for the element right after an "About the job" heading
+    for (const heading of document.querySelectorAll('h2, h3, h4')) {
+      if (/about the job|about this role/i.test(heading.innerText)) {
+        let el = heading.parentElement
+        for (let i = 0; i < 5; i++) {
+          if (el?.innerText?.trim().length > 300) return el.innerText.trim()
+          el = el?.parentElement
+        }
+      }
+    }
+
+    // Last resort: find the largest text block on the page (that isn't nav/header)
+    let best = { len: 200, text: '' }
+    for (const el of document.querySelectorAll('div, section')) {
+      if (el.querySelector('nav, header') || el.closest('nav, header')) continue
+      const t = el.innerText?.trim() || ''
+      if (t.length > best.len) best = { len: t.length, text: t }
+    }
+    return best.text
+  }
+
   function fromDom() {
     const tc    = titleAndCompany()
     const title = tc.title || document.querySelector('h1')?.innerText?.trim() || ''
     if (!title) return null
 
-    const descEl = (
-      document.querySelector('#job-details') ||
-      document.querySelector('.jobs-description__content') ||
-      document.querySelector('[class*="jobs-description"]') ||
-      document.querySelector('article')
-    )
-    const desc = descEl?.innerText?.trim() || ''
-    // Accept even short descriptions — something is better than nothing
+    const desc = findDescription()
     if (!desc) return null
-
-    const emailMatch = desc.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/)
 
     function text(sels) {
       for (const s of sels) {
@@ -88,6 +116,7 @@
       return ''
     }
 
+    const emailMatch = desc.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/)
     return {
       title,
       company:        tc.company || text(['.jobs-unified-top-card__company-name a', 'a[href*="/company/"]']),
@@ -101,34 +130,30 @@
     }
   }
 
-  // ── Method 4: last resort — title only, empty description ──
+  // ── Method 4: title-only fallback — ONLY used after all polls exhausted ──
   function fromTitleOnly() {
     const tc = titleAndCompany()
     if (!tc.title || tc.title === 'LinkedIn') return null
     return {
-      title:          tc.title,
-      company:        tc.company,
-      location:       '',
-      salary:         '',
-      description:    '',
-      recruiterEmail: '',
-      companyWebsite: '',
-      platform:       'linkedin',
-      jobId:          jobId()
+      title: tc.title, company: tc.company,
+      location: '', salary: '', description: '',
+      recruiterEmail: '', companyWebsite: '',
+      platform: 'linkedin', jobId: jobId()
     }
   }
 
-  function extractJob() {
-    return fromJsonLd() || fromDom() || fromTitleOnly()
+  // Only try fromTitleOnly on the last attempt
+  function extractJob(last = false) {
+    return fromJsonLd() || fromDom() || (last ? fromTitleOnly() : null)
   }
 
   function poll() {
-    if (attempts >= MAX_ATTEMPTS) return
     attempts++
+    const isLast = attempts >= MAX_ATTEMPTS
+    const job = extractJob(isLast)
 
-    const job = extractJob()
     if (!job) {
-      setTimeout(poll, POLL_INTERVAL)
+      if (!isLast) setTimeout(poll, POLL_INTERVAL)
       return
     }
 
