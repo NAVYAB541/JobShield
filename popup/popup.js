@@ -92,6 +92,7 @@ function showResult(result) {
 }
 
 function init() {
+  // Load current result
   chrome.runtime.sendMessage({ type: 'GET_LAST_RESULT' }, (result) => {
     if (chrome.runtime.lastError || !result) { showIdle(); return }
     showResult(result)
@@ -99,6 +100,16 @@ function init() {
 
   chrome.runtime.sendMessage({ type: 'GET_API_KEY' }, (key) => {
     if (key) $('api-key-input').value = key
+  })
+
+  // Live-update: re-render whenever background writes a new result to storage
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== 'local') return
+    if ('lastResult' in changes) {
+      const next = changes.lastResult.newValue
+      if (next) showResult(next)
+      else showIdle()
+    }
   })
 }
 

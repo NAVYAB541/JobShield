@@ -114,6 +114,8 @@
       attempts   = 0
       lastAnalysedJobId = null
       window.dispatchEvent(new CustomEvent('jobshield:clear'))
+      // Clear stored result so popup shows idle until new scan completes
+      chrome.storage.local.remove('lastResult')
       setTimeout(poll, 1500)
     }
   }, 800)
