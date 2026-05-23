@@ -120,6 +120,17 @@
     }
 
     const emailMatch = desc.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/)
+
+    // Job poster's headline from "Meet the hiring team" section
+    const recruiterTitle = text([
+      '[class*="hirer-card"] .artdeco-entity-lockup__subtitle',
+      '[class*="hiring-team"] .artdeco-entity-lockup__subtitle',
+      '.jobs-poster__description',
+      '.hirer-card__description',
+      '[data-test-id="job-poster-title"]',
+      '[class*="job-poster"] [class*="subtitle"]'
+    ])
+
     return {
       title,
       company:        tc.company || text(['.jobs-unified-top-card__company-name a', 'a[href*="/company/"]']),
@@ -127,6 +138,7 @@
       salary:         text(['.compensation__salary', '[class*="salary"]']),
       description:    desc,
       recruiterEmail: emailMatch ? emailMatch[0] : '',
+      recruiterTitle,
       companyWebsite: '',
       platform:       'linkedin',
       jobId:          jobId()

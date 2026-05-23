@@ -66,7 +66,9 @@ const VAGUE_SALARY_PHRASES = [
   'negotiable','based on experience','attractive package'
 ]
 
-function normalise(t) { return (t || '').toLowerCase() }
+function normalise(t) {
+  return (t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+}
 function countMatches(text, phrases) { return phrases.filter(p => text.includes(p)).length }
 
 function analyseJob(job) {
@@ -125,9 +127,22 @@ function analyseJob(job) {
   if (isEntryLevel && isRemote && !job.location)
     flags.push({ id:'remote_entry', label:'Remote entry-level with no listed location', weight:5 })
 
-  const genericNames = ['company','confidential','undisclosed','anonymous','private company']
+  const genericNames = ['company','confidential','undisclosed','anonymous','private company','own company']
   if (genericNames.some(n => normalise(job.company || '').includes(n)))
     flags.push({ id:'generic_company', label:'Company name is generic or confidential', weight:6 })
+
+  // ── Job poster appears to be a job-seeker, not a recruiter ──
+  const JOB_SEEKER_PHRASES = [
+    'open to work', 'open to opportunities', 'actively looking', 'looking for my first',
+    'seeking a new role', 'seeking new opportunities', 'seeking employment',
+    'first experience', 'premiere experience', 'a la recherche', 'en recherche d',
+    'recherche emploi', 'looking for work', 'currently seeking', 'job search'
+  ]
+  if (job.recruiterTitle) {
+    const rt = normalise(job.recruiterTitle)
+    if (JOB_SEEKER_PHRASES.some(p => rt.includes(p)))
+      flags.push({ id:'poster_job_seeker', label:'Job poster appears to be a job-seeker, not a recruiter', weight:15 })
+  }
 
   const score = flags.reduce((s, f) => s + f.weight, 0)
 
@@ -144,7 +159,7 @@ function analyseJob(job) {
   if (wordCount >= 300)
     greenFlags.push(`Detailed description (${wordCount} words)`)
 
-  const genericNames2 = ['company','confidential','undisclosed','anonymous','private company']
+  const genericNames2 = ['company','confidential','undisclosed','anonymous','private company','own company']
   if (job.company && !genericNames2.some(n => normalise(job.company).includes(n)))
     greenFlags.push(`Named company: ${job.company}`)
 
