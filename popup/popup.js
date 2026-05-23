@@ -91,25 +91,41 @@ function showResult(result) {
     : ''
 }
 
+const JOB_PAGE_RE = /linkedin\.com\/jobs\/view\/|indeed\.com\/viewjob|seek\.com\.au\/job\//
+
+function injectIfNeeded(tabId, tabUrl) {
+  if (!JOB_PAGE_RE.test(tabUrl || '')) return
+  // inject content scripts into the active tab so no page refresh is needed
+  chrome.scripting.executeScript({ target: { tabId }, files: ['content/extractors/linkedin.js'] }).catch(() => {})
+  chrome.scripting.executeScript({ target: { tabId }, files: ['content/overlay.js'] }).catch(() => {})
+}
+
 function init() {
-  // Load current result
-  chrome.runtime.sendMessage({ type: 'GET_LAST_RESULT' }, (result) => {
-    if (chrome.runtime.lastError || !result) { showIdle(); return }
-    showResult(result)
+  // Live-update: re-render whenever background writes a new result to storage
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== 'local' || !('lastResult' in changes)) return
+    const next = changes.lastResult.newValue
+    if (next) showResult(next)
+    else showIdle()
+  })
+
+  chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
+    if (!tab) { showIdle(); return }
+
+    // Load stored result for this tab
+    chrome.runtime.sendMessage({ type: 'GET_LAST_RESULT' }, (result) => {
+      if (chrome.runtime.lastError || !result) {
+        showIdle()
+        // No result yet — inject scripts so it works without a page refresh
+        injectIfNeeded(tab.id, tab.url)
+      } else {
+        showResult(result)
+      }
+    })
   })
 
   chrome.runtime.sendMessage({ type: 'GET_API_KEY' }, (key) => {
     if (key) $('api-key-input').value = key
-  })
-
-  // Live-update: re-render whenever background writes a new result to storage
-  chrome.storage.onChanged.addListener((changes, area) => {
-    if (area !== 'local') return
-    if ('lastResult' in changes) {
-      const next = changes.lastResult.newValue
-      if (next) showResult(next)
-      else showIdle()
-    }
   })
 }
 

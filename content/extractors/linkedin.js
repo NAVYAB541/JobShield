@@ -1,6 +1,10 @@
 (function () {
+  // Prevent double-injection if script runs twice on same page
+  if (window.__jobshieldRunning) return
+  window.__jobshieldRunning = true
+
   const POLL_INTERVAL = 1000
-  const MAX_ATTEMPTS  = 20
+  const MAX_ATTEMPTS  = 25
   let attempts = 0
   let lastAnalysedJobId = null
 
@@ -9,74 +13,91 @@
     return m ? m[1] : null
   }
 
-  function getText(selectors) {
-    for (const sel of selectors) {
-      const el = document.querySelector(sel)
-      if (el && el.innerText?.trim()) return el.innerText.trim()
-    }
-    return ''
+  function stripHtml(html) {
+    return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
   }
 
-  function extractJob() {
-    // Title — try specific selectors then fall back to the page's only h1
-    const title = getText([
+  // Method 1: JSON-LD structured data embedded by LinkedIn — most reliable
+  function fromJsonLd() {
+    const scripts = document.querySelectorAll('script[type="application/ld+json"]')
+    for (const s of scripts) {
+      try {
+        const d = JSON.parse(s.textContent)
+        const job = Array.isArray(d) ? d.find(x => x['@type'] === 'JobPosting') : d
+        if (job?.['@type'] === 'JobPosting' && job.title) {
+          const loc = job.jobLocation
+          const location = [
+            loc?.address?.addressLocality,
+            loc?.address?.addressRegion,
+            loc?.address?.addressCountry
+          ].filter(Boolean).join(', ')
+
+          let salary = ''
+          if (job.baseSalary?.value) {
+            const v = job.baseSalary.value
+            salary = v.minValue && v.maxValue
+              ? `$${v.minValue}–$${v.maxValue} ${v.unitText || ''}`.trim()
+              : `$${v.value || ''} ${v.unitText || ''}`.trim()
+          }
+
+          return {
+            title:          job.title,
+            company:        job.hiringOrganization?.name || '',
+            location,
+            salary,
+            description:    stripHtml(job.description || ''),
+            recruiterEmail: '',
+            companyWebsite: job.hiringOrganization?.sameAs || '',
+            platform:       'linkedin',
+            jobId:          jobId()
+          }
+        }
+      } catch {}
+    }
+    return null
+  }
+
+  // Method 2: DOM scraping fallback
+  function fromDom() {
+    function text(selectors) {
+      for (const s of selectors) {
+        const el = document.querySelector(s)
+        if (el?.innerText?.trim()) return el.innerText.trim()
+      }
+      return ''
+    }
+
+    const title = text([
       '.job-details-jobs-unified-top-card__job-title h1',
       '.jobs-unified-top-card__job-title h1',
-      '.jobs-unified-top-card__job-title',
-      '.job-details-jobs-unified-top-card__job-title',
       'h1.t-24', 'h1'
     ])
 
-    // Description — the most important element
     const descEl = (
       document.querySelector('#job-details') ||
       document.querySelector('.jobs-description__content') ||
-      document.querySelector('.jobs-description-content__text--stretch') ||
-      document.querySelector('[class*="jobs-description"]') ||
-      document.querySelector('.jobs-box__html-content')
+      document.querySelector('[class*="jobs-description"]')
     )
 
-    // Must have at least title + description to proceed
-    if (!title || !descEl) return null
+    if (!title || !descEl || descEl.innerText.trim().length < 50) return null
 
-    const desc = descEl.innerText?.trim() || ''
-    if (desc.length < 50) return null   // description not rendered yet
-
-    const company = getText([
-      '.job-details-jobs-unified-top-card__company-name a',
-      '.job-details-jobs-unified-top-card__company-name',
-      '.jobs-unified-top-card__company-name a',
-      '.jobs-unified-top-card__company-name',
-      '[data-tracking-control-name*="company"] span',
-      'a[href*="/company/"]'
-    ])
-
-    const location = getText([
-      '.job-details-jobs-unified-top-card__bullet',
-      '.jobs-unified-top-card__bullet',
-      '.job-details-jobs-unified-top-card__workplace-type',
-      '[class*="unified-top-card"] [class*="bullet"]'
-    ])
-
-    const salary = getText([
-      '.compensation__salary',
-      '[class*="salary"]',
-      '[data-test-id="base-salary-info"]'
-    ])
-
-    const emailMatch = desc.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/)
+    const emailMatch = descEl.innerText.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/)
 
     return {
       title,
-      company,
-      location,
-      salary,
-      description: desc,
+      company:        text(['.job-details-jobs-unified-top-card__company-name a', '.jobs-unified-top-card__company-name a', 'a[href*="/company/"]']),
+      location:       text(['.job-details-jobs-unified-top-card__bullet', '.jobs-unified-top-card__bullet']),
+      salary:         text(['.compensation__salary', '[class*="salary"]']),
+      description:    descEl.innerText.trim(),
       recruiterEmail: emailMatch ? emailMatch[0] : '',
       companyWebsite: '',
-      platform: 'linkedin',
-      jobId: jobId()
+      platform:       'linkedin',
+      jobId:          jobId()
     }
+  }
+
+  function extractJob() {
+    return fromJsonLd() || fromDom()
   }
 
   function poll() {
@@ -96,30 +117,25 @@
     window.dispatchEvent(new CustomEvent('jobshield:loading'))
 
     chrome.runtime.sendMessage({ type: 'ANALYSE_JOB', job }, (response) => {
-      if (chrome.runtime.lastError) {
-        console.warn('[JobShield] runtime error:', chrome.runtime.lastError.message)
-        return
-      }
+      if (chrome.runtime.lastError) return
       if (!response) return
       window.dispatchEvent(new CustomEvent('jobshield:result', { detail: response }))
     })
   }
 
-  // Poll URL every 800ms — reliable for LinkedIn's pushState SPA navigation
+  // URL polling for SPA navigation
   let lastHref = window.location.href
   setInterval(() => {
     const current = window.location.href
     if (current !== lastHref) {
-      lastHref   = current
-      attempts   = 0
+      lastHref = current
+      attempts = 0
       lastAnalysedJobId = null
       window.dispatchEvent(new CustomEvent('jobshield:clear'))
-      // Clear stored result so popup shows idle until new scan completes
       chrome.storage.local.remove('lastResult')
       setTimeout(poll, 1500)
     }
   }, 800)
 
-  // Initial run
-  setTimeout(poll, 2000)
+  setTimeout(poll, 1500)
 })()
