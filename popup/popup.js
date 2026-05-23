@@ -44,6 +44,15 @@ function showResult(result) {
     $('ai-panel').classList.add('hidden')
   }
 
+  // ── AI disagreement warning ──
+  // Heuristics say LOW but AI strongly disagrees — flag the discrepancy
+  if (result.aiDisagreement) {
+    $('ai-panel').classList.remove('hidden')
+    $('ai-text').textContent =
+      (aiResult?.summary ? aiResult.summary + ' ' : '') +
+      '⚠ AI assessment differs from heuristic score — review carefully.'
+  }
+
   // ── Risk flags ──
   const allFlags = [
     ...(flags || []).map(f => f.label),

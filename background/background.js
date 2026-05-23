@@ -254,13 +254,18 @@ async function handleAnalysis(job, sender) {
     job: { title: job.title, company: job.company, platform: job.platform }
   }
 
-  if (heuristic.level === 'medium' || heuristic.level === 'high') {
-    const { groqApiKey } = await chrome.storage.local.get('groqApiKey')
-    if (groqApiKey) {
-      const ai = await analyseWithGroq(job, groqApiKey)
-      if (ai) {
-        result.aiResult = ai
-        if (ai.confidence >= 70) result.level = ai.risk_level
+  // AI runs on every job when a key is set — but is advisory only.
+  // It never overrides the heuristic level; it contributes flags + summary.
+  // This catches sophisticated scams that score LOW on heuristics.
+  const { groqApiKey } = await chrome.storage.local.get('groqApiKey')
+  if (groqApiKey) {
+    const ai = await analyseWithGroq(job, groqApiKey)
+    if (ai) {
+      result.aiResult = ai
+      // If AI strongly disagrees with a low heuristic score, record the discrepancy
+      // so the UI can surface it — but heuristic level is never overridden.
+      if (heuristic.level === 'low' && ai.risk_level === 'high' && ai.confidence >= 80) {
+        result.aiDisagreement = true
       }
     }
   }
