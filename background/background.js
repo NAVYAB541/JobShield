@@ -79,7 +79,37 @@ function analyseJob(job) {
     flags.push({ id:'generic_company', label:'Company name is generic or confidential', weight:6 })
 
   const score = flags.reduce((s, f) => s + f.weight, 0)
-  return { score, level: score >= 25 ? 'high' : score >= 12 ? 'medium' : 'low', flags }
+
+  // ── Green flags (positive signals) ──
+  const greenFlags = []
+
+  if (/\$[\d,]+|\d+\s*k\b|\d{2,3},\d{3}/.test(job.salary || ''))
+    greenFlags.push(`Salary specified: ${job.salary}`)
+
+  const wordCount = (job.description || '').trim().split(/\s+/).length
+  if (wordCount >= 300)
+    greenFlags.push(`Detailed description (${wordCount} words)`)
+
+  const genericNames2 = ['company','confidential','undisclosed','anonymous','private company']
+  if (job.company && !genericNames2.some(n => normalise(job.company).includes(n)))
+    greenFlags.push(`Named company: ${job.company}`)
+
+  if (job.location && job.location.trim())
+    greenFlags.push(`Location: ${job.location}`)
+
+  if (job.recruiterEmail && !FREE_EMAIL_DOMAINS.some(d => job.recruiterEmail.toLowerCase().endsWith('@' + d)))
+    greenFlags.push(`Professional email: ${job.recruiterEmail}`)
+
+  if (/\b(interview|screening|assessment|technical test|coding challenge|take.home)\b/.test(desc))
+    greenFlags.push('Interview process described')
+
+  if (/\b(benefits?|annual leave|paid time off|\bpto\b|superannuation|health insurance|flexible|equity|stock options)\b/.test(desc))
+    greenFlags.push('Benefits and perks listed')
+
+  if (/\b(years?.{1,10}experience|bachelor|degree|required skills|must have|essential)\b/.test(desc))
+    greenFlags.push('Clear requirements specified')
+
+  return { score, level: score >= 25 ? 'high' : score >= 12 ? 'medium' : 'low', flags, greenFlags }
 }
 
 // ─── Groq AI client (inlined) ─────────────────────────────────────────────────
@@ -149,6 +179,7 @@ async function handleAnalysis(job, sender) {
     level: heuristic.level,
     score: Math.min(heuristic.score, 100),
     flags: heuristic.flags,
+    greenFlags: heuristic.greenFlags,
     aiResult: null,
     job: { title: job.title, company: job.company, platform: job.platform }
   }

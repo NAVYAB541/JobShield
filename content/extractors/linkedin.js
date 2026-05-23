@@ -105,16 +105,18 @@
     })
   }
 
-  // Watch for LinkedIn SPA navigation
-  let lastPath = window.location.pathname
-  new MutationObserver(() => {
-    if (window.location.pathname !== lastPath) {
-      lastPath = window.location.pathname
-      attempts = 0
+  // Poll URL every 800ms — reliable for LinkedIn's pushState SPA navigation
+  let lastHref = window.location.href
+  setInterval(() => {
+    const current = window.location.href
+    if (current !== lastHref) {
+      lastHref   = current
+      attempts   = 0
+      lastAnalysedJobId = null
       window.dispatchEvent(new CustomEvent('jobshield:clear'))
-      setTimeout(poll, 1200)
+      setTimeout(poll, 1500)
     }
-  }).observe(document.body, { childList: true, subtree: true })
+  }, 800)
 
   // Initial run
   setTimeout(poll, 2000)

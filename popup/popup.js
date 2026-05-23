@@ -44,7 +44,7 @@ function showResult(result) {
     $('ai-panel').classList.add('hidden')
   }
 
-  // ── Flags ──
+  // ── Risk flags ──
   const allFlags = [
     ...(flags || []).map(f => f.label),
     ...(aiResult?.flags || []).filter(f => !flags?.some(h => h.label === f))
@@ -65,6 +65,23 @@ function showResult(result) {
   } else {
     $('flags-panel').classList.add('hidden')
     $('clear-panel').classList.remove('hidden')
+  }
+
+  // ── Green flags ──
+  const greenFlags = result.greenFlags || []
+  const greenList = $('green-list')
+  greenList.innerHTML = ''
+
+  if (greenFlags.length > 0) {
+    $('green-panel').classList.remove('hidden')
+    $('green-count').textContent = greenFlags.length
+    greenFlags.forEach(label => {
+      const li = document.createElement('li')
+      li.textContent = label
+      greenList.appendChild(li)
+    })
+  } else {
+    $('green-panel').classList.add('hidden')
   }
 
   // ── Footer ──
