@@ -2,9 +2,9 @@
   const ID = 'jobshield-badge'
 
   const CFG = {
-    low:    { label: 'LOW RISK',    color: '#00ff9d', bg: 'rgba(0,20,10,0.92)',  border: 'rgba(0,255,157,0.3)' },
-    medium: { label: 'MEDIUM RISK', color: '#ffb800', bg: 'rgba(20,14,0,0.92)', border: 'rgba(255,184,0,0.3)' },
-    high:   { label: 'HIGH RISK',   color: '#ff3b3b', bg: 'rgba(20,4,4,0.95)',  border: 'rgba(255,59,59,0.35)' }
+    low:    { label: 'LOW RISK',    sublabel: 'Looks Legitimate', color: '#00ff9d', bg: 'rgba(0,20,10,0.92)',  border: 'rgba(0,255,157,0.3)' },
+    medium: { label: 'MEDIUM RISK', sublabel: 'Needs Review',     color: '#ffb800', bg: 'rgba(20,14,0,0.92)', border: 'rgba(255,184,0,0.3)' },
+    high:   { label: 'HIGH RISK',   sublabel: 'Potential Scam',   color: '#ff3b3b', bg: 'rgba(20,4,4,0.95)',  border: 'rgba(255,59,59,0.35)' }
   }
 
   const EMOJI = { low: '🟢', medium: '🟡', high: '🔴' }
@@ -74,7 +74,10 @@
             <div style="font-family:monospace;font-weight:700;font-size:12px;letter-spacing:.1em;color:${cfg.color};${isHigh ? 'animation:js-blink 1.4s ease-in-out infinite' : ''}">
               ${cfg.label}
             </div>
-            <div style="font-family:monospace;font-size:10px;color:rgba(255,255,255,0.28);letter-spacing:.06em">
+            <div style="font-family:monospace;font-size:10px;letter-spacing:.06em;color:${cfg.color};opacity:.65;margin-top:1px">
+              ${cfg.sublabel}
+            </div>
+            <div style="font-family:monospace;font-size:9px;color:rgba(255,255,255,0.22);letter-spacing:.06em;margin-top:1px">
               SCORE ${score}/100
             </div>
           </div>

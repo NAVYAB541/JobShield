@@ -1,5 +1,6 @@
-const LEVEL_LABEL   = { low: 'LOW RISK', medium: 'MEDIUM RISK', high: 'HIGH RISK' }
-const LEVEL_EMOJI   = { low: '🟢', medium: '🟡', high: '🔴' }
+const LEVEL_LABEL    = { low: 'LOW RISK',   medium: 'MEDIUM RISK', high: 'HIGH RISK'     }
+const LEVEL_SUBLABEL = { low: 'Looks Legitimate', medium: 'Needs Review', high: 'Potential Scam' }
+const LEVEL_EMOJI    = { low: '🟢', medium: '🟡', high: '🔴' }
 const PLATFORM_LABEL = { linkedin: 'LinkedIn', indeed: 'Indeed', seek: 'Seek' }
 
 const EXTRACTION_CFG = {
@@ -24,8 +25,9 @@ function showResult(result) {
   // ── Risk card ──
   const card = $('risk-card')
   card.className = `risk-card level-${level}`
-  $('risk-icon').textContent = LEVEL_EMOJI[level] || '🟡'
-  $('risk-label').textContent = LEVEL_LABEL[level] || 'UNKNOWN'
+  $('risk-icon').textContent    = LEVEL_EMOJI[level]    || '🟡'
+  $('risk-label').textContent   = LEVEL_LABEL[level]    || 'UNKNOWN'
+  $('risk-sublabel').textContent = LEVEL_SUBLABEL[level] || ''
   $('job-title-small').textContent = job?.title
     ? `${job.title}${job.company ? ' · ' + job.company : ''}`
     : ''

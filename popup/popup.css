@@ -213,6 +213,14 @@ main { padding: 14px; }
 .level-medium .risk-label { color: var(--amber); text-shadow: 0 0 12px rgba(255,184,0,0.4); }
 .level-high   .risk-label { color: var(--red);   text-shadow: 0 0 12px rgba(255,59,59,0.4); animation: blink 1.4s ease-in-out infinite; }
 
+.risk-sublabel {
+  font-size: 10px; letter-spacing: .06em;
+  margin-top: 1px; opacity: .7;
+}
+.level-low    .risk-sublabel { color: var(--green); }
+.level-medium .risk-sublabel { color: var(--amber); }
+.level-high   .risk-sublabel { color: var(--red);   }
+
 @keyframes blink {
   0%,100% { opacity: 1; }
   50%      { opacity: .6; }
