@@ -119,10 +119,11 @@ function init() {
         return
       }
 
-      // Check stored result belongs to the current job page
+      // If not on a job page at all, never show a cached result
+      const onJobPage    = JOB_PAGE_RE.test(tab.url || '')
       const tabJobId     = (tab.url?.match(/\/jobs\/view\/(\d+)/) || [])[1]
       const storedJobId  = result.job?.jobId
-      const isStale      = tabJobId && storedJobId && String(tabJobId) !== String(storedJobId)
+      const isStale      = !onJobPage || (tabJobId && storedJobId && String(tabJobId) !== String(storedJobId))
 
       if (isStale) {
         showIdle()
