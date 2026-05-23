@@ -86,7 +86,6 @@ function analyseJob(job) {
   if (/\$[\d,]+|\d+\s*k\b|\d{2,3},\d{3}/.test(job.salary || ''))
     greenFlags.push(`Salary specified: ${job.salary}`)
 
-  const wordCount = (job.description || '').trim().split(/\s+/).length
   if (wordCount >= 300)
     greenFlags.push(`Detailed description (${wordCount} words)`)
 
