@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>JobShield</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <div class="shell">
+    <!-- Header -->
+    <header>
+      <div class="logo">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
+        <span>JobShield</span>
+      </div>
+      <button id="settings-btn" class="icon-btn" title="Settings">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+      </button>
+    </header>
+
+    <!-- Main view -->
+    <main id="main-view">
+      <!-- idle state -->
+      <div id="idle-state" class="state-block">
+        <div class="idle-icon">🛡️</div>
+        <p class="idle-text">Navigate to a job posting on LinkedIn, Indeed, or Seek to see its risk analysis.</p>
+        <div class="supported-sites">
+          <span class="site-chip linkedin">LinkedIn</span>
+          <span class="site-chip indeed">Indeed</span>
+          <span class="site-chip seek">Seek</span>
+        </div>
+      </div>
+
+      <!-- result state -->
+      <div id="result-state" class="state-block hidden">
+        <!-- risk header -->
+        <div id="risk-header" class="risk-header">
+          <div class="risk-left">
+            <span id="risk-emoji" class="risk-emoji"></span>
+            <div>
+              <div id="risk-level" class="risk-level"></div>
+              <div id="job-info" class="job-info"></div>
+            </div>
+          </div>
+          <div id="score-circle" class="score-circle">
+            <span id="score-val"></span>
+          </div>
+        </div>
+
+        <!-- AI summary -->
+        <div id="ai-summary" class="ai-summary hidden">
+          <div class="section-label">AI Analysis</div>
+          <p id="ai-summary-text"></p>
+        </div>
+
+        <!-- flags -->
+        <div id="flags-section" class="flags-section">
+          <div class="section-label">Risk Signals</div>
+          <ul id="flags-list" class="flags-list"></ul>
+        </div>
+
+        <!-- no flags -->
+        <div id="no-flags" class="no-flags hidden">
+          <span>✅</span> No suspicious signals detected.
+        </div>
+
+        <!-- platform -->
+        <div id="platform-tag" class="platform-tag"></div>
+      </div>
+    </main>
+
+    <!-- Settings view -->
+    <section id="settings-view" class="hidden">
+      <div class="settings-header">
+        <button id="back-btn" class="icon-btn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 18 9 12 15 6"/>
+          </svg>
+        </button>
+        <span>Settings</span>
+      </div>
+
+      <div class="settings-body">
+        <label class="field-label" for="api-key-input">Groq API Key <span class="optional">(optional — enables AI analysis)</span></label>
+        <input id="api-key-input" type="password" class="text-input" placeholder="gsk_..." autocomplete="off" />
+        <p class="field-hint">Used only for medium-risk jobs. Never sent anywhere except Groq's API.</p>
+        <button id="save-key-btn" class="btn-primary">Save Key</button>
+        <p id="save-status" class="save-status hidden">Saved!</p>
+
+        <div class="divider"></div>
+
+        <div class="about">
+          <strong>JobShield v1.0</strong>
+          <p>Scam risk detector for LinkedIn, Indeed &amp; Seek. Heuristics run locally. AI analysis via Groq (optional).</p>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
