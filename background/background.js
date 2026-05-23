@@ -1,5 +1,47 @@
 // ─── Heuristics engine (inlined to avoid importScripts path issues) ───────────
 
+// ── Title keyword lists ──────────────────────────────────────────────────────
+
+const SCAM_TITLE_KEYWORDS = [
+  // Vague / generic
+  'data entry', 'typing job', 'copy paste', 'form filling', 'online work',
+  'home based work', 'home based job', 'work at home', 'earn from home',
+  'earn money online', 'make money online', 'online earning', 'income opportunity',
+  // MLM / commission only
+  'brand ambassador', 'brand promoter', 'sales promoter', 'network marketer',
+  'affiliate marketer', 'mlm', 'multi level', 'direct sales', 'commission only',
+  // Unrealistic earnings
+  'earn up to', 'make up to', 'up to $', '$/hour easy', 'easy cash',
+  'financial freedom', 'be your own boss', 'set your own hours',
+  // Mystery / vague roles
+  'mystery shopper', 'product tester', 'social media evaluator',
+  'online panelist', 'survey taker', 'paid survey',
+  // Instant / no-skill
+  'no experience needed', 'no skills required', 'anyone can apply',
+  'immediate joining', 'same day joining', 'urgently hiring',
+]
+
+const LEGIT_TITLE_KEYWORDS = [
+  // Engineering roles
+  'software engineer', 'software developer', 'frontend engineer', 'backend engineer',
+  'full stack', 'fullstack', 'web developer', 'mobile developer', 'ios developer',
+  'android developer', 'flutter developer', 'react developer', 'node developer',
+  'python developer', 'java developer', '.net developer', 'rails developer',
+  // Specialisms
+  'devops engineer', 'platform engineer', 'site reliability', 'cloud engineer',
+  'data engineer', 'data scientist', 'machine learning', 'ml engineer', 'ai engineer',
+  'security engineer', 'cybersecurity', 'network engineer', 'systems engineer',
+  'qa engineer', 'test engineer', 'automation engineer',
+  // Levels (signal it's a structured org)
+  'graduate engineer', 'graduate developer', 'junior developer', 'junior engineer',
+  'associate engineer', 'senior engineer', 'senior developer', 'lead engineer',
+  'principal engineer', 'staff engineer', 'engineering manager',
+  // Other legit tech
+  'product manager', 'product designer', 'ux designer', 'ui designer',
+  'solutions architect', 'technical lead', 'tech lead', 'scrum master',
+  'business analyst', 'data analyst', 'database administrator',
+]
+
 const FREE_EMAIL_DOMAINS = [
   'gmail.com','yahoo.com','hotmail.com','outlook.com','aol.com',
   'protonmail.com','icloud.com','mail.com','ymail.com','live.com','msn.com'
@@ -34,6 +76,15 @@ function analyseJob(job) {
   const email    = normalise(job.recruiterEmail || '')
   const fullText = [desc, title, salary].join(' ')
   const flags    = []
+
+  // ── Title keyword analysis ──
+  const scamTitleMatch = SCAM_TITLE_KEYWORDS.find(k => title.includes(k))
+  if (scamTitleMatch)
+    flags.push({ id:'scam_title', label:`Title contains scam keyword: "${scamTitleMatch}"`, weight:18 })
+
+  // Salary-in-title pattern like "$500/day" or "earn $50/hr"
+  if (/\$\d+\s*(\/|\bper\b)\s*(hr|hour|day|week)/.test(title))
+    flags.push({ id:'salary_in_title', label:'Salary promise in job title (common scam pattern)', weight:12 })
 
   const emails = (fullText + ' ' + email).match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g) || []
   const freeEmails = emails.filter(e => FREE_EMAIL_DOMAINS.some(d => e.endsWith('@' + d)))
@@ -82,6 +133,10 @@ function analyseJob(job) {
 
   // ── Green flags (positive signals) ──
   const greenFlags = []
+
+  const legitTitle = LEGIT_TITLE_KEYWORDS.find(k => title.includes(k))
+  if (legitTitle && !scamTitleMatch)
+    greenFlags.push(`Recognised role title: "${job.title}"`)
 
   if (/\$[\d,]+|\d+\s*k\b|\d{2,3},\d{3}/.test(job.salary || ''))
     greenFlags.push(`Salary specified: ${job.salary}`)
