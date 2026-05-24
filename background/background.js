@@ -132,10 +132,10 @@ const CONTEXT_MULTIPLIERS = {
   free_email:      { tech:1.5, corporate:1.3, graduate:1.2, hospitality:0.3, retail:0.3, trades:0.4, healthcare:0.5, gig:0.6, general:1.0 },
   email_mismatch:  { tech:1.3, corporate:1.2, graduate:1.0, hospitality:0.2, retail:0.2, trades:0.3, healthcare:0.4, gig:0.5, general:1.0 },
   urgency_high:    { tech:1.3, corporate:1.2, graduate:1.4, hospitality:0.2, retail:0.3, trades:0.4, healthcare:0.3, gig:0.7, general:1.0 },
-  urgency_low:     { tech:1.0, corporate:1.0, graduate:1.0, hospitality:0.0, retail:0.0, trades:0.1, healthcare:0.1, gig:0.4, general:1.0 },
-  short_desc:      { tech:1.2, corporate:1.0, graduate:1.0, hospitality:0.0, retail:0.0, trades:0.1, healthcare:0.4, gig:0.4, general:1.0 },
-  vague_salary:    { tech:1.0, corporate:1.0, graduate:1.0, hospitality:0.0, retail:0.0, trades:0.2, healthcare:0.3, gig:0.0, general:1.0 },
-  remote_entry:    { tech:1.0, corporate:1.0, graduate:1.2, hospitality:0.0, retail:0.0, trades:0.0, healthcare:0.0, gig:0.2, general:1.0 },
+  urgency_low:     { tech:1.0, corporate:1.0, graduate:1.0, hospitality:0.1, retail:0.1, trades:0.1, healthcare:0.1, gig:0.4, general:1.0 },
+  short_desc:      { tech:1.2, corporate:1.0, graduate:1.0, hospitality:0.1, retail:0.1, trades:0.1, healthcare:0.4, gig:0.4, general:1.0 },
+  vague_salary:    { tech:1.0, corporate:1.0, graduate:1.0, hospitality:0.1, retail:0.1, trades:0.2, healthcare:0.3, gig:0.1, general:1.0 },
+  remote_entry:    { tech:1.0, corporate:1.0, graduate:1.2, hospitality:0.1, retail:0.1, trades:0.1, healthcare:0.1, gig:0.2, general:1.0 },
   tgtb_low:        { tech:1.2, corporate:1.0, graduate:1.0, hospitality:0.2, retail:0.2, trades:0.2, healthcare:0.3, gig:0.1, general:1.0 },
   tgtb_high:       { tech:1.2, corporate:1.0, graduate:1.0, hospitality:0.3, retail:0.3, trades:0.3, healthcare:0.4, gig:0.2, general:1.0 },
   generic_company: { tech:1.2, corporate:0.7, graduate:1.0, hospitality:0.4, retail:0.4, trades:0.4, healthcare:0.5, gig:0.6, general:1.0 },
@@ -150,6 +150,17 @@ function applyContext(flags, context) {
     })
     .filter(f => f.weight > 0)
 }
+
+// co-occurring signals are stronger together than their individual weights suggest
+const COMPOUND_RULES = [
+  { flags: ['free_email', 'generic_company', 'urgency_high'], bonus: 12, label: 'Combination: unnamed company + free email + urgency (classic scam pattern)' },
+  { flags: ['free_email', 'remote_entry', 'short_desc'],      bonus: 10, label: 'Combination: free email + remote entry-level + very short description' },
+  { flags: ['tgtb_high', 'free_email'],                       bonus: 8,  label: 'Combination: "too good to be true" language + free email' },
+  { flags: ['suspicious_url', 'free_email'],                  bonus: 10, label: 'Combination: suspicious link + free email (phishing risk)' },
+  { flags: ['money_request', 'free_email'],                   bonus: 8,  label: 'Combination: fee request + free email' },
+  { flags: ['scam_title', 'urgency_high'],                    bonus: 6,  label: 'Combination: scam-pattern title + urgency pressure' },
+  { flags: ['tgtb_high', 'salary_in_title'],                  bonus: 8,  label: 'Combination: unrealistic earnings in title and description' },
+]
 
 // \u2500\u2500 Salary parser \u2014 returns estimated annual figure or null \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 function parseSalaryAnnual(str) {
@@ -195,7 +206,7 @@ function analyseJob(job) {
   const emails = (fullText + ' ' + email).match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g) || []
   const freeEmails = emails.filter(e => FREE_EMAIL_DOMAINS.some(d => e.endsWith('@' + d)))
   if (freeEmails.length > 0)
-    flags.push({ id:'free_email', label:`Recruiter uses free email (${freeEmails[0]})`, weight:15 })
+    flags.push({ id:'free_email', label:`Recruiter uses free email (${freeEmails[0]})`, weight:10 })
 
   if (job.recruiterEmail && job.company) {
     const domain     = (job.recruiterEmail.split('@')[1] || '').toLowerCase()
@@ -291,6 +302,15 @@ function analyseJob(job) {
 
   // apply context multipliers — suppresses or boosts each flag weight by role type
   const adjustedFlags = applyContext(flags, context)
+
+  // compound bonuses: co-occurring signals score higher than their sum
+  // only fires if both flags survived context adjustment with weight > 2
+  const activeIds = new Set(adjustedFlags.filter(f => f.weight > 2).map(f => f.id))
+  for (const rule of COMPOUND_RULES) {
+    if (rule.flags.every(id => activeIds.has(id)))
+      adjustedFlags.push({ id: 'compound', label: rule.label, weight: rule.bonus })
+  }
+
   const score = adjustedFlags.reduce((s, f) => s + f.weight, 0)
 
   // ── Green flags (positive signals) ──

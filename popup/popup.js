@@ -1,5 +1,5 @@
 const LEVEL_LABEL    = { low: 'LOW RISK',   medium: 'MEDIUM RISK', high: 'HIGH RISK'     }
-const LEVEL_SUBLABEL = { low: 'Looks Legitimate', medium: 'Needs Review', high: 'Potential Scam' }
+const LEVEL_SUBLABEL = { low: 'No Major Red Flags', medium: 'Needs Review', high: 'Potential Scam' }
 const LEVEL_EMOJI    = { low: '🟢', medium: '🟡', high: '🔴' }
 const PLATFORM_LABEL = { linkedin: 'LinkedIn', indeed: 'Indeed', seek: 'Seek' }
 

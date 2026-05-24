@@ -2,7 +2,7 @@
   const ID = 'jobshield-badge'
 
   const CFG = {
-    low:    { label: 'LOW RISK',    sublabel: 'Looks Legitimate', color: '#00ff9d', bg: 'rgba(0,20,10,0.92)',  border: 'rgba(0,255,157,0.3)' },
+    low:    { label: 'LOW RISK',    sublabel: 'No Major Red Flags', color: '#00ff9d', bg: 'rgba(0,20,10,0.92)',  border: 'rgba(0,255,157,0.3)' },
     medium: { label: 'MEDIUM RISK', sublabel: 'Needs Review',     color: '#ffb800', bg: 'rgba(20,14,0,0.92)', border: 'rgba(255,184,0,0.3)' },
     high:   { label: 'HIGH RISK',   sublabel: 'Potential Scam',   color: '#ff3b3b', bg: 'rgba(20,4,4,0.95)',  border: 'rgba(255,59,59,0.35)' }
   }
