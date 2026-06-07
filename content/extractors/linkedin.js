@@ -1,8 +1,6 @@
 (function () {
-  // Only run on job view pages
   if (!/\/jobs\/view\/\d+/.test(window.location.pathname)) return
 
-  // If already polling for this exact job, skip
   const currentId = (window.location.pathname.match(/\/jobs\/view\/(\d+)/) || [])[1]
   if (window.__jobshieldJobId === currentId && currentId) return
   window.__jobshieldJobId = currentId
@@ -15,12 +13,6 @@
     return (window.location.pathname.match(/\/jobs\/view\/(\d+)/) || [])[1] || null
   }
 
-  function stripHtml(h) {
-    return h.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
-  }
-
-  // ── Method 1: page <title> (always available, zero DOM scraping) ──
-  // LinkedIn format: "Job Title | Company Name | LinkedIn"
   function titleAndCompany() {
     const parts = document.title.replace(' | LinkedIn', '').split(' | ')
     return {
@@ -29,7 +21,6 @@
     }
   }
 
-  // ── Method 2: JSON-LD structured data ──
   function fromJsonLd() {
     for (const s of document.querySelectorAll('script[type="application/ld+json"]')) {
       try {
@@ -66,9 +57,7 @@
     return null
   }
 
-  // ── Method 3: DOM scraping with aggressive description finder ──
   function findDescription() {
-    // Specific selectors first
     const specific = [
       '#job-details',
       '.jobs-description__content',
@@ -83,7 +72,6 @@
       if (el?.innerText?.trim().length > 100) return el.innerText.trim()
     }
 
-    // Look for the element right after an "About the job" heading
     for (const heading of document.querySelectorAll('h2, h3, h4')) {
       if (/about the job|about this role/i.test(heading.innerText)) {
         let el = heading.parentElement
@@ -94,7 +82,6 @@
       }
     }
 
-    // Last resort: find the largest text block on the page (that isn't nav/header)
     let best = { len: 200, text: '' }
     for (const el of document.querySelectorAll('div, section')) {
       if (el.querySelector('nav, header') || el.closest('nav, header')) continue
@@ -112,18 +99,7 @@
     const desc = findDescription()
     if (!desc) return null
 
-    function text(sels) {
-      for (const s of sels) {
-        const t = document.querySelector(s)?.innerText?.trim()
-        if (t) return t
-      }
-      return ''
-    }
-
-    const emailMatch = desc.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/)
-
-    // Job poster's headline from "Meet the hiring team" section
-    const recruiterTitle = text([
+    const recruiterTitle = JobShieldExtractors.queryFirstText([
       '[class*="hirer-card"] .artdeco-entity-lockup__subtitle',
       '[class*="hiring-team"] .artdeco-entity-lockup__subtitle',
       '.jobs-poster__description',
@@ -134,11 +110,11 @@
 
     return {
       title,
-      company:        tc.company || text(['.jobs-unified-top-card__company-name a', 'a[href*="/company/"]']),
-      location:       text(['.job-details-jobs-unified-top-card__bullet', '.jobs-unified-top-card__bullet']),
-      salary:         text(['.compensation__salary', '[class*="salary"]']),
+      company:        tc.company || JobShieldExtractors.queryFirstText(['.jobs-unified-top-card__company-name a', 'a[href*="/company/"]']),
+      location:       JobShieldExtractors.queryFirstText(['.job-details-jobs-unified-top-card__bullet', '.jobs-unified-top-card__bullet']),
+      salary:         JobShieldExtractors.queryFirstText(['.compensation__salary', '[class*="salary"]']),
       description:    desc,
-      recruiterEmail: emailMatch ? emailMatch[0] : '',
+      recruiterEmail: extractFirstEmail(desc),
       recruiterTitle,
       companyWebsite: '',
       platform:       'linkedin',
@@ -147,7 +123,6 @@
     }
   }
 
-  // ── Method 4: title-only fallback — ONLY used after all polls exhausted ──
   function fromTitleOnly() {
     const tc = titleAndCompany()
     if (!tc.title || tc.title === 'LinkedIn') return null
@@ -160,7 +135,6 @@
     }
   }
 
-  // Only try fromTitleOnly on the last attempt
   function extractJob(last = false) {
     return fromJsonLd() || fromDom() || (last ? fromTitleOnly() : null)
   }
@@ -175,16 +149,9 @@
       return
     }
 
-    window.dispatchEvent(new CustomEvent('jobshield:loading'))
-    try {
-      chrome.runtime.sendMessage({ type: 'ANALYSE_JOB', job }, (response) => {
-        if (chrome.runtime.lastError || !response) return
-        window.dispatchEvent(new CustomEvent('jobshield:result', { detail: response }))
-      })
-    } catch {}
+    JobShieldExtractors.analyseAndDispatch(job)
   }
 
-  // URL polling for SPA navigation
   let lastHref = window.location.href
   setInterval(() => {
     const cur = window.location.href
@@ -194,10 +161,8 @@
     window.__jobshieldJobId = null
     window.dispatchEvent(new CustomEvent('jobshield:clear'))
     try { chrome.storage?.local?.remove('lastResult') } catch {}
-    // Only re-poll if we navigated to another job page
     if (/\/jobs\/view\/\d+/.test(cur)) setTimeout(poll, 1500)
   }, 800)
 
-  // Start immediately — don't wait for DOM if title already available
   poll()
 })()

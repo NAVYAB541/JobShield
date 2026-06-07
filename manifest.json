@@ -25,7 +25,14 @@
         "https://www.linkedin.com/jobs/*",
         "https://linkedin.com/jobs/*"
       ],
-      "js": ["content/extractors/linkedin.js", "content/overlay.js"],
+      "js": [
+        "lib/text-utils.js",
+        "content/extractors/common.js",
+        "content/extractors/linkedin.js",
+        "lib/risk-levels.js",
+        "lib/result-utils.js",
+        "content/overlay.js"
+      ],
       "run_at": "document_idle"
     },
     {
@@ -34,7 +41,14 @@
         "https://www.indeed.com/jobs*",
         "https://indeed.com/viewjob*"
       ],
-      "js": ["content/extractors/indeed.js", "content/overlay.js"],
+      "js": [
+        "lib/text-utils.js",
+        "content/extractors/common.js",
+        "content/extractors/indeed.js",
+        "lib/risk-levels.js",
+        "lib/result-utils.js",
+        "content/overlay.js"
+      ],
       "run_at": "document_idle"
     },
     {
@@ -42,7 +56,14 @@
         "https://www.seek.com.au/job/*",
         "https://seek.com.au/job/*"
       ],
-      "js": ["content/extractors/seek.js", "content/overlay.js"],
+      "js": [
+        "lib/text-utils.js",
+        "content/extractors/common.js",
+        "content/extractors/seek.js",
+        "lib/risk-levels.js",
+        "lib/result-utils.js",
+        "content/overlay.js"
+      ],
       "run_at": "document_idle"
     }
   ],

@@ -1,6 +1,3 @@
-const LEVEL_LABEL    = { low: 'LOW RISK',   medium: 'MEDIUM RISK', high: 'HIGH RISK'     }
-const LEVEL_SUBLABEL = { low: 'No Major Red Flags', medium: 'Needs Review', high: 'Potential Scam' }
-const LEVEL_EMOJI    = { low: '🟢', medium: '🟡', high: '🔴' }
 const PLATFORM_LABEL = { linkedin: 'LinkedIn', indeed: 'Indeed', seek: 'Seek' }
 
 const EXTRACTION_CFG = {
@@ -20,31 +17,27 @@ function showResult(result) {
   $('idle-state').classList.add('hidden')
   $('result-state').classList.remove('hidden')
 
-  const { level, score, flags, aiResult, job } = result
+  const { level, score, aiResult, job } = result
 
-  // ── Risk card ──
   const card = $('risk-card')
   card.className = `risk-card level-${level}`
-  $('risk-icon').textContent    = LEVEL_EMOJI[level]    || '🟡'
-  $('risk-label').textContent   = LEVEL_LABEL[level]    || 'UNKNOWN'
-  $('risk-sublabel').textContent = LEVEL_SUBLABEL[level] || ''
+  const levelCfg = RISK_LEVELS[level] || RISK_LEVELS.medium
+  $('risk-icon').textContent    = levelCfg.emoji
+  $('risk-label').textContent   = levelCfg.label
+  $('risk-sublabel').textContent = levelCfg.sublabel
   $('job-title-small').textContent = job?.title
     ? `${job.title}${job.company ? ' · ' + job.company : ''}`
     : ''
 
-  // ── Score gauge ──
-  // circumference of r=14 circle ≈ 87.96, we use 88
   const pct = Math.min(score, 100)
   const arc = (pct / 100) * 88
   const gaugeArc = $('gauge-arc')
   gaugeArc.setAttribute('stroke-dasharray', `${arc} 88`)
   $('score-val').textContent = score
 
-  // ── Threat bar ──
   $('threat-fill').style.width = `${pct}%`
   $('threat-pct').textContent = `${pct}%`
 
-  // ── AI panel ──
   if (aiResult?.summary) {
     $('ai-panel').classList.remove('hidden')
     $('ai-text').textContent = aiResult.summary
@@ -52,8 +45,6 @@ function showResult(result) {
     $('ai-panel').classList.add('hidden')
   }
 
-  // ── AI disagreement warning ──
-  // Heuristics say LOW but AI strongly disagrees — flag the discrepancy
   if (result.aiDisagreement) {
     $('ai-panel').classList.remove('hidden')
     $('ai-text').textContent =
@@ -61,11 +52,7 @@ function showResult(result) {
       '⚠ AI assessment differs from heuristic score — review carefully.'
   }
 
-  // ── Risk flags ──
-  const allFlags = [
-    ...(flags || []).map(f => f.label),
-    ...(aiResult?.flags || []).filter(f => !flags?.some(h => h.label === f))
-  ]
+  const allFlags = mergeFlagLabels(result, { dedupe: true })
 
   const list = $('flags-list')
   list.innerHTML = ''
@@ -84,7 +71,6 @@ function showResult(result) {
     $('clear-panel').classList.remove('hidden')
   }
 
-  // ── Green flags ──
   const greenFlags = result.greenFlags || []
   const greenList = $('green-list')
   greenList.innerHTML = ''
@@ -101,7 +87,6 @@ function showResult(result) {
     $('green-panel').classList.add('hidden')
   }
 
-  // ── Extraction confidence ──
   const extCfg = EXTRACTION_CFG[result.extractionMethod]
   const extEl  = $('extraction-confidence')
   if (extCfg) {
@@ -112,7 +97,6 @@ function showResult(result) {
     extEl.classList.add('hidden')
   }
 
-  // ── Context chip ──
   const ctx = result.context
   const ctxParts = [
     ctx?.roleType !== 'general' ? ctx?.roleType : null,
@@ -128,7 +112,6 @@ function showResult(result) {
     ctxEl.classList.add('hidden')
   }
 
-  // ── Footer ──
   const platform = job?.platform
   $('platform-footer').textContent = platform
     ? `// scanned on ${PLATFORM_LABEL[platform] || platform}`
@@ -137,15 +120,26 @@ function showResult(result) {
 
 const JOB_PAGE_RE = /linkedin\.com\/jobs\/view\/|indeed\.com\/viewjob|seek\.com\.au\/job\//
 
+function extractorForUrl(url) {
+  if (/linkedin\.com\/jobs/.test(url || '')) return 'content/extractors/linkedin.js'
+  if (/indeed\.com/.test(url || '')) return 'content/extractors/indeed.js'
+  if (/seek\.com\.au\/job/.test(url || '')) return 'content/extractors/seek.js'
+  return null
+}
+
 function injectIfNeeded(tabId, tabUrl) {
   if (!JOB_PAGE_RE.test(tabUrl || '')) return
-  // inject content scripts into the active tab so no page refresh is needed
-  chrome.scripting.executeScript({ target: { tabId }, files: ['content/extractors/linkedin.js'] }).catch(() => {})
+  const extractor = extractorForUrl(tabUrl)
+  if (!extractor) return
+  chrome.scripting.executeScript({ target: { tabId }, files: ['lib/text-utils.js'] }).catch(() => {})
+  chrome.scripting.executeScript({ target: { tabId }, files: ['content/extractors/common.js'] }).catch(() => {})
+  chrome.scripting.executeScript({ target: { tabId }, files: [extractor] }).catch(() => {})
+  chrome.scripting.executeScript({ target: { tabId }, files: ['lib/risk-levels.js'] }).catch(() => {})
+  chrome.scripting.executeScript({ target: { tabId }, files: ['lib/result-utils.js'] }).catch(() => {})
   chrome.scripting.executeScript({ target: { tabId }, files: ['content/overlay.js'] }).catch(() => {})
 }
 
 function init() {
-  // Live-update: re-render whenever background writes a new result to storage
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local' || !('lastResult' in changes)) return
     const next = changes.lastResult.newValue
@@ -163,7 +157,6 @@ function init() {
         return
       }
 
-      // If not on a job page at all, never show a cached result
       const onJobPage    = JOB_PAGE_RE.test(tab.url || '')
       const tabJobId     = (tab.url?.match(/\/jobs\/view\/(\d+)/) || [])[1]
       const storedJobId  = result.job?.jobId

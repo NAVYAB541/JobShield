@@ -1,54 +1,41 @@
-// Seek (seek.com.au) job page DOM extractor.
-
 (function () {
-  const POLL_INTERVAL = 800
-  const MAX_ATTEMPTS = 15
+  const { POLL_INTERVAL, MAX_ATTEMPTS, queryFirst, analyseAndDispatch } = JobShieldExtractors
   let attempts = 0
   let lastAnalysedPath = null
 
   function extractJob() {
-    // Title
-    const titleEl = document.querySelector([
+    const titleEl = queryFirst([
       '[data-automation="job-detail-title"]',
       'h1[class*="JobTitle"]',
       'h1[class*="jobTitle"]',
       '.FYwKg h1'
-    ].join(','))
+    ])
 
-    // Company
-    const companyEl = document.querySelector([
+    const companyEl = queryFirst([
       '[data-automation="advertiser-name"]',
       'span[class*="AdvertiserName"]',
       'a[data-automation="job-detail-company"]'
-    ].join(','))
+    ])
 
-    // Location
-    const locationEl = document.querySelector([
+    const locationEl = queryFirst([
       '[data-automation="job-detail-location"]',
       '[data-automation="job-detail-work-type"]',
       'span[class*="Location"]'
-    ].join(','))
+    ])
 
-    // Salary
-    const salaryEl = document.querySelector([
+    const salaryEl = queryFirst([
       '[data-automation="job-detail-salary"]',
       'span[class*="Salary"]',
       '[class*="salary"]'
-    ].join(','))
+    ])
 
-    // Description
-    const descEl = document.querySelector([
+    const descEl = queryFirst([
       '[data-automation="jobAdDetails"]',
       '[class*="job-detail-preview"]',
       '.FYwKg section'
-    ].join(','))
+    ])
 
-    // Company website (Seek sometimes shows it)
     const websiteEl = document.querySelector('[data-automation="company-website"] a')
-
-    const emailMatch = (descEl?.innerText || '').match(
-      /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/
-    )
 
     if (!titleEl || !descEl) return null
 
@@ -58,7 +45,7 @@
       location: locationEl?.innerText?.trim() || '',
       salary: salaryEl?.innerText?.trim() || '',
       description: descEl.innerText?.trim() || '',
-      recruiterEmail: emailMatch ? emailMatch[0] : '',
+      recruiterEmail: extractFirstEmail(descEl.innerText || ''),
       companyWebsite: websiteEl?.href || '',
       platform: 'seek',
       jobKey: window.location.pathname
@@ -79,14 +66,9 @@
     }
 
     lastAnalysedPath = currentPath
-
-    chrome.runtime.sendMessage({ type: 'ANALYSE_JOB', job }, (response) => {
-      if (chrome.runtime.lastError || !response) return
-      window.dispatchEvent(new CustomEvent('jobshield:result', { detail: response }))
-    })
+    analyseAndDispatch(job)
   }
 
-  // Seek is a SPA — watch for navigation
   let lastHref = window.location.href
   const observer = new MutationObserver(() => {
     if (window.location.href !== lastHref) {

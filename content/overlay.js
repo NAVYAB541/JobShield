@@ -1,13 +1,6 @@
 (function () {
   const ID = 'jobshield-badge'
 
-  const CFG = {
-    low:    { label: 'LOW RISK',    sublabel: 'No Major Red Flags', color: '#00ff9d', bg: 'rgba(0,20,10,0.92)',  border: 'rgba(0,255,157,0.3)' },
-    medium: { label: 'MEDIUM RISK', sublabel: 'Needs Review',     color: '#ffb800', bg: 'rgba(20,14,0,0.92)', border: 'rgba(255,184,0,0.3)' },
-    high:   { label: 'HIGH RISK',   sublabel: 'Potential Scam',   color: '#ff3b3b', bg: 'rgba(20,4,4,0.95)',  border: 'rgba(255,59,59,0.35)' }
-  }
-
-  const EMOJI = { low: '🟢', medium: '🟡', high: '🔴' }
 
   function injectStyles() {
     if (document.getElementById('jobshield-styles')) return
@@ -28,13 +21,10 @@
     remove()
     injectStyles()
 
-    const { level, score, flags, aiResult } = result
-    const cfg = CFG[level] || CFG.medium
+    const { level, score, aiResult } = result
+    const cfg = RISK_LEVELS[level] || RISK_LEVELS.medium
 
-    const allFlags = [
-      ...(flags || []).map(f => f.label),
-      ...(aiResult?.flags || [])
-    ].filter(Boolean).slice(0, 4)
+    const allFlags = mergeFlagLabels(result, { limit: 4 })
 
     const summary = aiResult?.summary || ''
     const isHigh  = level === 'high'
@@ -69,7 +59,7 @@
     body.innerHTML = `
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
         <div style="display:flex;align-items:center;gap:8px">
-          <span style="font-size:18px">${EMOJI[level]}</span>
+          <span style="font-size:18px">${cfg.emoji}</span>
           <div>
             <div style="font-family:monospace;font-weight:700;font-size:12px;letter-spacing:.1em;color:${cfg.color};${isHigh ? 'animation:js-blink 1.4s ease-in-out infinite' : ''}">
               ${cfg.label}
@@ -125,7 +115,6 @@
       </div>
     `
     document.body.appendChild(el)
-    // Auto-dismiss scanning badge after 12s if no result arrives
     setTimeout(() => { if (document.getElementById(ID) === el) remove() }, 12000)
   }
 
